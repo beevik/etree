@@ -4,7 +4,6 @@ package etree
 import (
     "bufio"
     "container/list"
-    "fmt"
     "io"
 )
 
@@ -19,7 +18,7 @@ type Token interface {
 // An Element represents an XML element.  The Children list contains
 // Tokens.
 type Element struct {
-    Name     string
+    Name     []byte
     Attr     []Attr
     Children *list.List
 }
@@ -32,20 +31,20 @@ type CharData []byte
 
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
-    Key   string
-    Value string
+    Key   []byte
+    Value []byte
 }
 
 // NewElement creates a root-level XML element with the specified name.
 func NewElement(name string) *Element {
     return &Element{
-        Name:     name,
+        Name:     []byte(name),
         Attr:     make([]Attr, 0),
-        Children: list.New(),       // list of Tokens
+        Children: list.New(), // list of Tokens
     }
 }
 
-// CreateElement creates a child element of the the receiving element and
+// CreateElement creates a child element of the receiving element and
 // gives it the specified name.
 func (e *Element) CreateElement(name string) *Element {
     c := NewElement(name)
@@ -68,19 +67,19 @@ func (e *Element) Indent(spaces int) {
     e.indent(1, spaces)
 }
 
-// indent recursively inserts proper indentation into between an
+// indent recursively inserts proper indentation between an
 // XML element's child tokens.
 func (e *Element) indent(depth, spaces int) {
     for c := e.Children.Front(); c != nil; {
         n := c.Next()
         e.Children.InsertBefore(indentCharData(depth, spaces), c)
         if ce, ok := c.Value.(*Element); ok {
-            ce.indent(depth + 1, spaces)
+            ce.indent(depth+1, spaces)
         }
         c = n
     }
     if b := e.Children.Back(); b != nil {
-        e.Children.InsertAfter(indentCharData(depth - 1, spaces), b)
+        e.Children.InsertAfter(indentCharData(depth-1, spaces), b)
     }
 }
 
@@ -91,7 +90,8 @@ func (e *Element) addChild(t Token) {
 
 // writeTo serializes the element to the writer w.
 func (e *Element) writeTo(w *bufio.Writer) {
-    w.WriteString(fmt.Sprintf("<%s", e.Name))
+    w.WriteByte('<')
+    w.Write(e.Name)
     for _, a := range e.Attr {
         w.WriteByte(' ')
         a.writeTo(w)
@@ -101,27 +101,27 @@ func (e *Element) writeTo(w *bufio.Writer) {
         for c := e.Children.Front(); c != nil; c = c.Next() {
             c.Value.(Token).writeTo(w)
         }
-        w.WriteString(fmt.Sprintf("</%s>", e.Name))
+        w.Write([]byte{'<', '/'})
+        w.Write(e.Name)
+        w.WriteByte('>')
     } else {
-        w.WriteString("/>")
+        w.Write([]byte{'/', '>'})
     }
-}
-
-// AddAttr adds an attribute to the element.
-func (e *Element) AddAttr(a Attr) {
-    e.Attr = append(e.Attr, a)
 }
 
 // CreateAttr creates an attribute and adds it to the receiving element.
 func (e *Element) CreateAttr(key, value string) Attr {
-    a := Attr{key, value}
+    a := Attr{[]byte(key), []byte(value)}
     e.Attr = append(e.Attr, a)
     return a
 }
 
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer) {
-    w.WriteString(fmt.Sprintf(`%s="%s"`, a.Key, escape(a.Value)))
+    w.Write(a.Key)
+    w.Write([]byte{'=', '"'})
+    w.Write(a.Value)
+    w.WriteByte('"')
 }
 
 // newCharData creates an XML character data entity.
@@ -141,7 +141,7 @@ func (e *Element) CreateCharData(charData string) *CharData {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer) {
-    w.WriteString(string(*c))
+    w.Write(escape(*c))
 }
 
 // NewComment creates an XML comment.
@@ -161,13 +161,15 @@ func (e *Element) CreateComment(comment string) *Comment {
 
 // writeTo serialies the comment to the writer.
 func (c *Comment) writeTo(w *bufio.Writer) {
-    w.WriteString(fmt.Sprintf("<!-- %s -->", string(*c)))
+    w.Write([]byte{'<', '!', '-', '-', ' '})
+    w.Write(*c)
+    w.Write([]byte{' ', '-', '-', '>'})
 }
 
 // indentCharData returns the indentation CharData token for the given
 // depth level with the given number of spaces per level.
 func indentCharData(depth, spaces int) *CharData {
-    c := 1 + depth * spaces
+    c := 1 + depth*spaces
     if c > len(sp) {
         return newCharData(sp)
     } else {
@@ -175,22 +177,43 @@ func indentCharData(depth, spaces int) *CharData {
     }
 }
 
+var escapeTable = [...]byte{
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 1, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 5, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+}
+
+var substTable = [...][]byte{
+    {'&', 'q', 'u', 'o', 't', ';'}, // 1
+    {'&', 'a', 'm', 'p', ';'},      // 2
+    {'&', 'a', 'p', 'o', 's', ';'}, // 3
+    {'&', 'l', 't', ';'},           // 4
+    {'&', 'g', 't', ';'},           // 5
+}
+
 // escape generates an escaped XML string.
-func escape(s string) string {
-    buf := make([]byte, 0, len(s))
-    for i := 0; i < len(s); i++ {
-        switch {
-        case s[i] == '&':
-            buf = append(buf, []byte{'&', 'a', 'm', 'p', ';'}...)
-        case s[i] == '\'':
-            buf = append(buf, []byte{'&', 'a', 'p', 'o', 's', ';'}...)
-        case s[i] == '<':
-            buf = append(buf, []byte{'&', 'l', 't', ';'}...)
-        case s[i] == '>':
-            buf = append(buf, []byte{'&', 'g', 't', ';'}...)
-        default:
-            buf = append(buf, s[i])
+func escape(b []byte) []byte {
+    buf := make([]byte, 0, len(b))
+    for _, c := range b {
+        subst := escapeTable[c]
+        if subst > 0 {
+            buf = append(buf, substTable[subst-1]...)
+        } else {
+            buf = append(buf, c)
         }
     }
-    return string(buf)
+    return buf
 }
