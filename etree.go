@@ -15,6 +15,13 @@ type Token interface {
     writeTo(w *bufio.Writer)
 }
 
+// A Document represents an XML document.  It is essentially
+// an element without a name or attributes, and it is never
+// serialized directly to XML; only its children are.
+type Document struct {
+    Element
+}
+
 // An Element represents an XML element.  The Children list contains
 // Tokens.
 type Element struct {
@@ -23,16 +30,45 @@ type Element struct {
     Children *list.List
 }
 
+// An Attr represents a key-value attribute of an XML element.
+type Attr struct {
+    Key   []byte
+    Value []byte
+}
+
 // A Comment represents an XML comment
 type Comment []byte
 
 // CharData represents character data within XML.
 type CharData []byte
 
-// An Attr represents a key-value attribute of an XML element.
-type Attr struct {
-    Key   []byte
-    Value []byte
+// A ProcInst represents an XML processing instruction.
+type ProcInst struct {
+    Target []byte
+    Inst   []byte
+}
+
+// NewDocument creates an empty XML document and returns it.
+func NewDocument() *Document {
+    d := new(Document)
+    d.Children = list.New()
+    return d
+}
+
+// WriteTo serializes an XML document into the writer w.
+func (d *Document) WriteTo(w io.Writer) error {
+    b := bufio.NewWriter(w)
+    for c := d.Children.Front(); c != nil; c = c.Next() {
+        c.Value.(Token).writeTo(b)
+    }
+    return b.Flush()
+}
+
+// Indent modifies the element tree by inserting CharData entities
+// that introduce indentation.  The amount of indenting per depth
+// level is equal to spaces.
+func (d *Document) Indent(spaces int) {
+    d.indent(0, spaces)
 }
 
 // NewElement creates a root-level XML element with the specified name.
@@ -72,13 +108,15 @@ func (e *Element) Indent(spaces int) {
 func (e *Element) indent(depth, spaces int) {
     for c := e.Children.Front(); c != nil; {
         n := c.Next()
-        e.Children.InsertBefore(indentCharData(depth, spaces), c)
+        if depth > 0 || c != e.Children.Front() {
+            e.Children.InsertBefore(indentCharData(depth, spaces), c)
+        }
         if ce, ok := c.Value.(*Element); ok {
             ce.indent(depth+1, spaces)
         }
         c = n
     }
-    if b := e.Children.Back(); b != nil {
+    if b := e.Children.Back(); depth > 0 && b != nil {
         e.Children.InsertAfter(indentCharData(depth-1, spaces), b)
     }
 }
@@ -164,6 +202,31 @@ func (c *Comment) writeTo(w *bufio.Writer) {
     w.Write([]byte{'<', '!', '-', '-', ' '})
     w.Write(*c)
     w.Write([]byte{' ', '-', '-', '>'})
+}
+
+// newProcInst creates a new processing instruction.
+func newProcInst(target, inst string) *ProcInst {
+    return &ProcInst{
+        Target: []byte(target),
+        Inst:   []byte(inst),
+    }
+}
+
+// CreateProcInst creates a processing instruction and adds it as a
+// child of the receiving element
+func (e *Element) CreateProcInst(target, inst string) *ProcInst {
+    p := newProcInst(target, inst)
+    e.addChild(p)
+    return p
+}
+
+// writeTo serializes the processing instruction to the writer.
+func (p *ProcInst) writeTo(w *bufio.Writer) {
+    w.Write([]byte{'<', '?'})
+    w.Write(p.Target)
+    w.WriteByte(' ')
+    w.Write(p.Inst)
+    w.Write([]byte{'?', '>'})
 }
 
 // indentCharData returns the indentation CharData token for the given
