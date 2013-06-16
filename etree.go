@@ -10,7 +10,7 @@ import (
 const sp string = "\n                                                            "
 
 // A Token is an empty interface that represents an Element,
-// Comment, CharData or ProcInst.
+// Comment, CharData, Directive or ProcInst.
 type Token interface {
     writeTo(w *bufio.Writer)
 }
@@ -22,8 +22,7 @@ type Document struct {
     Element
 }
 
-// An Element represents an XML element.  The Children list contains
-// Tokens.
+// An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
     Name  []byte
     Attr  []Attr
@@ -92,7 +91,9 @@ func (d *Document) indent(depth, spaces int) {
     d.Child = newChild
 }
 
-// NewElement creates a root-level XML element with the specified name.
+// NewElement creates an XML element with the specified name.
+// In most cases, you should use NewDocument and create elements
+// with the CreateElement function.
 func NewElement(name string) *Element {
     return &Element{
         Name:  []byte(name),
