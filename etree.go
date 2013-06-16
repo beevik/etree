@@ -1,9 +1,9 @@
-// Package etree provides XML services through an Element Tree abstraction.
+// Package etree provides XML services through an Element Tree
+// abstraction.
 package etree
 
 import (
     "bufio"
-    "container/list"
     "io"
 )
 
@@ -15,9 +15,9 @@ type Token interface {
     writeTo(w *bufio.Writer)
 }
 
-// A Document represents an XML document.  It is essentially
-// an element without a name or attributes, and it is never
-// serialized directly to XML; only its children are.
+// A Document is the root level object in an etree.  It represents the
+// XML document as a whole.  It embeds an Element type but only uses the
+// Element type's Child tokens.
 type Document struct {
     Element
 }
@@ -25,9 +25,9 @@ type Document struct {
 // An Element represents an XML element.  The Children list contains
 // Tokens.
 type Element struct {
-    Name     []byte
-    Attr     []Attr
-    Children *list.List
+    Name  []byte
+    Attr  []Attr
+    Child []Token
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -36,7 +36,7 @@ type Attr struct {
     Value []byte
 }
 
-// A Comment represents an XML comment
+// A Comment represents an XML comment.
 type Comment []byte
 
 // CharData represents character data within XML.
@@ -51,32 +51,53 @@ type ProcInst struct {
 // NewDocument creates an empty XML document and returns it.
 func NewDocument() *Document {
     d := new(Document)
-    d.Children = list.New()
+    d.Child = make([]Token, 0)
     return d
 }
 
 // WriteTo serializes an XML document into the writer w.
 func (d *Document) WriteTo(w io.Writer) error {
     b := bufio.NewWriter(w)
-    for c := d.Children.Front(); c != nil; c = c.Next() {
-        c.Value.(Token).writeTo(b)
+    for _, c := range d.Child {
+        c.writeTo(b)
     }
     return b.Flush()
 }
 
-// Indent modifies the element tree by inserting CharData entities
-// that introduce indentation.  The amount of indenting per depth
-// level is equal to spaces.
+// Indent modifies the document's element tree by inserting
+// CharData entities containing carriage returns and indentation.
+// The amount of indenting per depth level is equal to spaces.
 func (d *Document) Indent(spaces int) {
     d.indent(0, spaces)
+}
+
+// indent recursively inserts indentation CharData entities
+// between an XML document's child tokens.
+func (d *Document) indent(depth, spaces int) {
+    n := len(d.Child)
+    if n == 0 {
+        return
+    }
+    newChild := make([]Token, n*2-1)
+    for i, c := range d.Child {
+        j := i * 2
+        newChild[j] = c
+        if j+1 < len(newChild) {
+            newChild[j+1] = newIndentCharData(depth, spaces)
+        }
+        if e, ok := c.(*Element); ok {
+            e.indent(depth+1, spaces)
+        }
+    }
+    d.Child = newChild
 }
 
 // NewElement creates a root-level XML element with the specified name.
 func NewElement(name string) *Element {
     return &Element{
-        Name:     []byte(name),
-        Attr:     make([]Attr, 0),
-        Children: list.New(), // list of Tokens
+        Name:  []byte(name),
+        Attr:  make([]Attr, 0),
+        Child: make([]Token, 0),
     }
 }
 
@@ -96,9 +117,9 @@ func (e *Element) WriteTo(w io.Writer) error {
     return b.Flush()
 }
 
-// Indent modifies the element tree by inserting CharData entities
-// that introduce indentation.  The amount of indenting per depth
-// level is equal to spaces.
+// Indent modifies the element's element tree by inserting
+// CharData entities containing carriage returns and indentation.
+// The amount of indenting per depth level is equal to spaces.
 func (e *Element) Indent(spaces int) {
     e.indent(1, spaces)
 }
@@ -106,24 +127,26 @@ func (e *Element) Indent(spaces int) {
 // indent recursively inserts proper indentation between an
 // XML element's child tokens.
 func (e *Element) indent(depth, spaces int) {
-    for c := e.Children.Front(); c != nil; {
-        n := c.Next()
-        if depth > 0 || c != e.Children.Front() {
-            e.Children.InsertBefore(indentCharData(depth, spaces), c)
-        }
-        if ce, ok := c.Value.(*Element); ok {
-            ce.indent(depth+1, spaces)
-        }
-        c = n
+    n := len(e.Child)
+    if n == 0 {
+        return
     }
-    if b := e.Children.Back(); depth > 0 && b != nil {
-        e.Children.InsertAfter(indentCharData(depth-1, spaces), b)
+    newChild := make([]Token, n*2+1)
+    for i, c := range e.Child {
+        j := i * 2
+        newChild[j] = newIndentCharData(depth, spaces)
+        newChild[j+1] = c
+        if e, ok := c.(*Element); ok {
+            e.indent(depth+1, spaces)
+        }
     }
+    newChild[n*2] = newIndentCharData(depth-1, spaces)
+    e.Child = newChild
 }
 
 // addChild adds a child token to the receiving element.
 func (e *Element) addChild(t Token) {
-    e.Children.PushBack(t)
+    e.Child = append(e.Child, t)
 }
 
 // writeTo serializes the element to the writer w.
@@ -134,10 +157,10 @@ func (e *Element) writeTo(w *bufio.Writer) {
         w.WriteByte(' ')
         a.writeTo(w)
     }
-    if e.Children.Len() > 0 {
+    if len(e.Child) > 0 {
         w.WriteString(">")
-        for c := e.Children.Front(); c != nil; c = c.Next() {
-            c.Value.(Token).writeTo(w)
+        for _, c := range e.Child {
+            c.writeTo(w)
         }
         w.Write([]byte{'<', '/'})
         w.Write(e.Name)
@@ -229,9 +252,9 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
     w.Write([]byte{'?', '>'})
 }
 
-// indentCharData returns the indentation CharData token for the given
+// newIndentCharData returns the indentation CharData token for the given
 // depth level with the given number of spaces per level.
-func indentCharData(depth, spaces int) *CharData {
+func newIndentCharData(depth, spaces int) *CharData {
     c := 1 + depth*spaces
     if c > len(sp) {
         return newCharData(sp)
@@ -240,6 +263,8 @@ func indentCharData(depth, spaces int) *CharData {
     }
 }
 
+// escapeTable is a table of offsets into the escape substTable
+// for each ASCII character.  Zero represents no substitution.
 var escapeTable = [...]byte{
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
