@@ -4,10 +4,16 @@ package etree
 
 import (
     "bufio"
+    "encoding/xml"
+    "errors"
     "io"
 )
 
 const sp string = "\n                                                            "
+
+var (
+    ErrInvalidFormat = errors.New("etree: invalid XML format")
+)
 
 // A Token is an empty interface that represents an Element,
 // Comment, CharData, Directive or ProcInst.
@@ -36,12 +42,14 @@ type Attr struct {
 }
 
 // A Comment represents an XML comment.
-type Comment []byte
+type Comment struct {
+    Data []byte
+}
 
 // CharData represents character data within XML.
 type CharData struct {
-    Data   []byte
-    indent bool
+    Data       []byte
+    whitespace bool
 }
 
 // A ProcInst represents an XML processing instruction.
@@ -57,6 +65,12 @@ func NewDocument() *Document {
     return d
 }
 
+// ReadFrom reads XML from the reader r and adds the result as
+// a new child of the receiving document.
+func (d *Document) ReadFrom(r io.Reader) error {
+    return d.Element.ReadFrom(r)
+}
+
 // WriteTo serializes an XML document into the writer w.
 func (d *Document) WriteTo(w io.Writer) error {
     b := bufio.NewWriter(w)
@@ -70,12 +84,6 @@ func (d *Document) WriteTo(w io.Writer) error {
 // CharData entities containing carriage returns and indentation.
 // The amount of indenting per depth level is equal to spaces.
 func (d *Document) Indent(spaces int) {
-    d.indent(0, spaces)
-}
-
-// indent recursively inserts indentation CharData entities
-// between an XML document's child tokens.
-func (d *Document) indent(depth, spaces int) {
     d.stripIndent()
     n := len(d.Child)
     if n == 0 {
@@ -86,10 +94,10 @@ func (d *Document) indent(depth, spaces int) {
         j := i * 2
         newChild[j] = c
         if j+1 < len(newChild) {
-            newChild[j+1] = newIndentCharData(depth, spaces)
+            newChild[j+1] = newIndentCharData(0, spaces)
         }
         if e, ok := c.(*Element); ok {
-            e.indent(depth+1, spaces)
+            e.indent(1, spaces)
         }
     }
     d.Child = newChild
@@ -114,12 +122,65 @@ func (e *Element) CreateElement(name string) *Element {
     return c
 }
 
+// ReadFrom reads XML from the reader r and stores the result as
+// a new child of the receiving element.
+func (e *Element) ReadFrom(r io.Reader) error {
+    stack := []*Element{e}
+    dec := xml.NewDecoder(r)
+    for {
+        t, err := dec.RawToken()
+        if err == io.EOF {
+            break
+        } else if err != nil {
+            return err
+        } else if len(stack) == 0 {
+            return ErrInvalidFormat
+        }
+        top := stack[len(stack)-1]
+        switch t := t.(type) {
+        case xml.StartElement:
+            e := top.CreateElement(t.Name.Local)
+            for _, a := range t.Attr {
+                e.CreateAttr(a.Name.Local, a.Value)
+            }
+            stack = append(stack, e)
+        case xml.EndElement:
+            stack[len(stack)-1] = nil
+            stack = stack[:len(stack)-1]
+        case xml.CharData:
+            data := copyBytes(t)
+            cd := &CharData{Data: data, whitespace: isWhitespace(data)}
+            top.Child = append(top.Child, cd)
+        case xml.Comment:
+            top.Child = append(top.Child, &Comment{Data: copyBytes(t)})
+        case xml.ProcInst:
+            top.Child = append(
+                top.Child,
+                &ProcInst{Target: []byte(t.Target), Inst: copyBytes(t.Inst)},
+            )
+        }
+    }
+    return nil
+}
+
 // WriteTo serializes the element and its children as XML into
 // the writer w.
 func (e *Element) WriteTo(w io.Writer) error {
     b := bufio.NewWriter(w)
     e.writeTo(b)
     return b.Flush()
+}
+
+// ChildElements returns all elements that are children of the
+// receiving element.
+func (e *Element) ChildElements() []*Element {
+    elements := make([]*Element, 0)
+    for _, c := range e.Child {
+        if e, ok := c.(*Element); ok {
+            elements = append(elements, e)
+        }
+    }
+    return elements
 }
 
 // Indent modifies the element's element tree by inserting
@@ -155,7 +216,7 @@ func (e *Element) stripIndent() {
     // Count the number of non-indent child tokens
     n := len(e.Child)
     for _, c := range e.Child {
-        if cd, ok := c.(*CharData); ok && cd.indent {
+        if cd, ok := c.(*CharData); ok && cd.whitespace {
             n--
         }
     }
@@ -167,7 +228,7 @@ func (e *Element) stripIndent() {
     newChild := make([]Token, n)
     j := 0
     for _, c := range e.Child {
-        if cd, ok := c.(*CharData); ok && cd.indent {
+        if cd, ok := c.(*CharData); ok && cd.whitespace {
             continue
         }
         newChild[j] = c
@@ -218,10 +279,10 @@ func (a *Attr) writeTo(w *bufio.Writer) {
 }
 
 // newCharData creates an XML character data entity.
-func newCharData(data string, indent bool) *CharData {
+func newCharData(data string, whitespace bool) *CharData {
     return &CharData{
-        Data:   []byte(data),
-        indent: indent,
+        Data:       []byte(data),
+        whitespace: whitespace,
     }
 }
 
@@ -240,9 +301,7 @@ func (c *CharData) writeTo(w *bufio.Writer) {
 
 // NewComment creates an XML comment.
 func newComment(comment string) *Comment {
-    c := new(Comment)
-    *c = Comment(comment)
-    return c
+    return &Comment{Data: []byte(comment)}
 }
 
 // CreateComment creates an XML comment and adds it as a child of the
@@ -256,7 +315,7 @@ func (e *Element) CreateComment(comment string) *Comment {
 // writeTo serialies the comment to the writer.
 func (c *Comment) writeTo(w *bufio.Writer) {
     w.Write([]byte{'<', '!', '-', '-', ' '})
-    w.Write(*c)
+    w.Write(c.Data)
     w.Write([]byte{' ', '-', '-', '>'})
 }
 
@@ -337,4 +396,34 @@ func escape(b []byte) []byte {
         }
     }
     return buf
+}
+
+// copyBytes makes a copy of a byte slice.
+func copyBytes(b []byte) []byte {
+    c := make([]byte, len(b))
+    copy(c, b)
+    return c
+}
+
+// isWhitespace returns true if the byte slice contains only
+// whitespace characters.
+func isWhitespace(b []byte) bool {
+    for _, c := range b {
+        if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
+            return false
+        }
+    }
+    return true
+}
+
+func isEqual(b []byte, s string) bool {
+    if len(b) != len(s) {
+        return false
+    }
+    for i := 0; i < len(s); i++ {
+        if b[i] != s[i] {
+            return false
+        }
+    }
+    return true
 }
