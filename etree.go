@@ -9,8 +9,6 @@ import (
     "io"
 )
 
-const sp string = "\n                                                            "
-
 var (
     ErrInvalidFormat = errors.New("etree: invalid XML format")
 )
@@ -347,83 +345,8 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
 // newIndentCharData returns the indentation CharData token for the given
 // depth level with the given number of spaces per level.
 func newIndentCharData(depth, spaces int) *CharData {
-    c := 1 + depth*spaces
-    if c > len(sp) {
-        return newCharData(sp, true)
-    } else {
-        return newCharData(sp[:c], true)
+    return &CharData{
+        Data:       crSpaces(depth * spaces),
+        whitespace: true,
     }
-}
-
-// escapeTable is a table of offsets into the escape substTable
-// for each ASCII character.  Zero represents no substitution.
-var escapeTable = [...]byte{
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 1, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 5, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-}
-
-var substTable = [...][]byte{
-    {'&', 'q', 'u', 'o', 't', ';'}, // 1
-    {'&', 'a', 'm', 'p', ';'},      // 2
-    {'&', 'a', 'p', 'o', 's', ';'}, // 3
-    {'&', 'l', 't', ';'},           // 4
-    {'&', 'g', 't', ';'},           // 5
-}
-
-// escape generates an escaped XML string.
-func escape(b []byte) []byte {
-    buf := make([]byte, 0, len(b))
-    for _, c := range b {
-        subst := escapeTable[c]
-        if subst > 0 {
-            buf = append(buf, substTable[subst-1]...)
-        } else {
-            buf = append(buf, c)
-        }
-    }
-    return buf
-}
-
-// copyBytes makes a copy of a byte slice.
-func copyBytes(b []byte) []byte {
-    c := make([]byte, len(b))
-    copy(c, b)
-    return c
-}
-
-// isWhitespace returns true if the byte slice contains only
-// whitespace characters.
-func isWhitespace(b []byte) bool {
-    for _, c := range b {
-        if c != ' ' && c != '\t' && c != '\n' && c != '\r' {
-            return false
-        }
-    }
-    return true
-}
-
-func isEqual(b []byte, s string) bool {
-    if len(b) != len(s) {
-        return false
-    }
-    for i := 0; i < len(s); i++ {
-        if b[i] != s[i] {
-            return false
-        }
-    }
-    return true
 }
