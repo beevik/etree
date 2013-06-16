@@ -39,7 +39,10 @@ type Attr struct {
 type Comment []byte
 
 // CharData represents character data within XML.
-type CharData []byte
+type CharData struct {
+    Data   []byte
+    indent bool
+}
 
 // A ProcInst represents an XML processing instruction.
 type ProcInst struct {
@@ -73,6 +76,7 @@ func (d *Document) Indent(spaces int) {
 // indent recursively inserts indentation CharData entities
 // between an XML document's child tokens.
 func (d *Document) indent(depth, spaces int) {
+    d.stripIndent()
     n := len(d.Child)
     if n == 0 {
         return
@@ -128,6 +132,7 @@ func (e *Element) Indent(spaces int) {
 // indent recursively inserts proper indentation between an
 // XML element's child tokens.
 func (e *Element) indent(depth, spaces int) {
+    e.stripIndent()
     n := len(e.Child)
     if n == 0 {
         return
@@ -145,9 +150,30 @@ func (e *Element) indent(depth, spaces int) {
     e.Child = newChild
 }
 
-// addChild adds a child token to the receiving element.
-func (e *Element) addChild(t Token) {
-    e.Child = append(e.Child, t)
+// stripIndent removes any previously inserted indentation.
+func (e *Element) stripIndent() {
+    // Count the number of non-indent child tokens
+    n := len(e.Child)
+    for _, c := range e.Child {
+        if cd, ok := c.(*CharData); ok && cd.indent {
+            n--
+        }
+    }
+    if n == len(e.Child) {
+        return
+    }
+
+    // Strip out indent CharData
+    newChild := make([]Token, n)
+    j := 0
+    for _, c := range e.Child {
+        if cd, ok := c.(*CharData); ok && cd.indent {
+            continue
+        }
+        newChild[j] = c
+        j++
+    }
+    e.Child = newChild
 }
 
 // writeTo serializes the element to the writer w.
@@ -171,6 +197,11 @@ func (e *Element) writeTo(w *bufio.Writer) {
     }
 }
 
+// addChild adds a child token to the receiving element.
+func (e *Element) addChild(t Token) {
+    e.Child = append(e.Child, t)
+}
+
 // CreateAttr creates an attribute and adds it to the receiving element.
 func (e *Element) CreateAttr(key, value string) Attr {
     a := Attr{[]byte(key), []byte(value)}
@@ -187,23 +218,24 @@ func (a *Attr) writeTo(w *bufio.Writer) {
 }
 
 // newCharData creates an XML character data entity.
-func newCharData(charData string) *CharData {
-    c := new(CharData)
-    *c = CharData(charData)
-    return c
+func newCharData(data string, indent bool) *CharData {
+    return &CharData{
+        Data:   []byte(data),
+        indent: indent,
+    }
 }
 
 // CreateCharData creates an XML character data entity and adds it
 // as a child of the receiving element.
-func (e *Element) CreateCharData(charData string) *CharData {
-    c := newCharData(charData)
+func (e *Element) CreateCharData(data string) *CharData {
+    c := newCharData(data, false)
     e.addChild(c)
     return c
 }
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer) {
-    w.Write(escape(*c))
+    w.Write(escape(c.Data))
 }
 
 // NewComment creates an XML comment.
@@ -258,9 +290,9 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
 func newIndentCharData(depth, spaces int) *CharData {
     c := 1 + depth*spaces
     if c > len(sp) {
-        return newCharData(sp)
+        return newCharData(sp, true)
     } else {
-        return newCharData(sp[:c])
+        return newCharData(sp[:c], true)
     }
 }
 
