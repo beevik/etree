@@ -6,7 +6,7 @@ import (
 )
 
 // Create an etree Document, add XML entities to it, and serialize it to stdout.
-func ExampleNewDocument() {
+func Example() {
     doc := etree.NewDocument()
     doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
     doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
