@@ -32,10 +32,10 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
-	Tag   string  // The element tag
-	Attr  []Attr  // The element's list of key-value attribute pairs
-	Child []Token // The element's child tokens (elements, comments, etc.)
-	Text  string  // The text immediately following the element's start tag
+	Tag   string    // The element tag
+	Attr  []Attr    // The element's list of key-value attribute pairs
+	Child []Token   // The element's child tokens (elements, comments, etc.)
+	text  *CharData // The char data token containing the element's text
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -119,6 +119,30 @@ func NewElement(tag string) *Element {
 	}
 }
 
+// Text returns the characters immediately following the element's
+// opening tag.
+func (e *Element) Text() string {
+	if e.text == nil {
+		return ""
+	} else {
+		return e.text.Data
+	}
+}
+
+// SetText replaces an element's subsidiary CharData text with a new
+// string.
+func (e *Element) SetText(text string) {
+	if e.text == nil {
+		e.Child = append(e.Child, nil)
+		copy(e.Child[1:], e.Child[0:])
+		c := newCharData(text, false)
+		e.Child[0] = c
+		e.text = c
+	} else {
+		e.text.Data = text
+	}
+}
+
 // CreateElement creates a child element of the receiving element and
 // gives it the specified name.
 func (e *Element) CreateElement(name string) *Element {
@@ -147,7 +171,7 @@ func (s *elementStack) peek() *Element {
 // a new child of the receiving element.
 func (e *Element) ReadFrom(r io.Reader) error {
 	stack := elementStack{e}
-	var textPtr *string
+	var textPtr **CharData
 	dec := xml.NewDecoder(r)
 	for {
 		t, err := dec.RawToken()
@@ -169,20 +193,20 @@ func (e *Element) ReadFrom(r io.Reader) error {
 				e.CreateAttr(a.Name.Local, a.Value)
 			}
 			stack.push(e)
-			textPtr = &e.Text
+			textPtr = &e.text
 		case xml.EndElement:
 			stack.pop()
 			textPtr = nil
 		case xml.CharData:
 			data := string(t)
-			top.Child = append(top.Child, newCharData(data))
+			cd := top.createCharData(data, isWhitespace(data))
 			if textPtr != nil {
-				*textPtr += data
+				*textPtr = cd
 			}
 		case xml.Comment:
-			top.Child = append(top.Child, &Comment{Data: string(t)})
+			top.CreateComment(string(t))
 		case xml.ProcInst:
-			top.Child = append(top.Child, newProcInst(t.Target, string(t.Inst)))
+			top.CreateProcInst(t.Target, string(t.Inst))
 		}
 	}
 }
@@ -224,22 +248,22 @@ func (e *Element) indent(depth, spaces int) {
 		return
 	}
 
-	newChild := make([]Token, 0, n*2+1)
+	oldChild := e.Child
+	e.Child = make([]Token, 0, n*2+1)
 	isCharData := false
-	for _, c := range e.Child {
+	for _, c := range oldChild {
 		_, isCharData = c.(*CharData)
-		if !isCharData && spaces != NoIndent {
-			newChild = append(newChild, newIndentCharData(depth, spaces))
+		if !isCharData && spaces >= 0 {
+			e.addChild(newIndentCharData(depth, spaces))
 		}
-		newChild = append(newChild, c)
-		if e, ok := c.(*Element); ok {
-			e.indent(depth+1, spaces)
+		e.addChild(c)
+		if ce, ok := c.(*Element); ok {
+			ce.indent(depth+1, spaces)
 		}
 	}
-	if !isCharData && spaces != NoIndent {
-		newChild = append(newChild, newIndentCharData(depth-1, spaces))
+	if !isCharData && spaces >= 0 {
+		e.addChild(newIndentCharData(depth-1, spaces))
 	}
-	e.Child = newChild
 }
 
 // stripIndent removes any previously inserted indentation.
@@ -310,18 +334,24 @@ func (a *Attr) writeTo(w *bufio.Writer) {
 }
 
 // newCharData creates an XML character data entity.
-func newCharData(data string) *CharData {
-	return &CharData{
-		Data:       data,
-		whitespace: isWhitespace(data),
-	}
+func newCharData(data string, whitespace bool) *CharData {
+	return &CharData{Data: data, whitespace: whitespace}
 }
 
 // CreateCharData creates an XML character data entity and adds it
 // as a child of the receiving element.
 func (e *Element) CreateCharData(data string) *CharData {
-	c := newCharData(data)
+	return e.createCharData(data, false)
+}
+
+// CreateCharData creates an XML character data entity and adds it
+// as a child of the receiving element.
+func (e *Element) createCharData(data string, whitespace bool) *CharData {
+	c := newCharData(data, whitespace)
 	e.addChild(c)
+	if !whitespace {
+		e.text = c
+	}
 	return c
 }
 
@@ -375,8 +405,5 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
 // newIndentCharData returns the indentation CharData token for the given
 // depth level with the given number of spaces per level.
 func newIndentCharData(depth, spaces int) *CharData {
-	return &CharData{
-		Data:       crSpaces(depth * spaces),
-		whitespace: true,
-	}
+	return newCharData(crSpaces(depth*spaces), true)
 }
