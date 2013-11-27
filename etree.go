@@ -32,10 +32,9 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
-	Tag   string    // The element tag
-	Attr  []Attr    // The element's list of key-value attribute pairs
-	Child []Token   // The element's child tokens (elements, comments, etc.)
-	text  *CharData // The char data token containing the element's text
+	Tag   string  // The element tag
+	Attr  []Attr  // The element's list of key-value attribute pairs
+	Child []Token // The element's child tokens (elements, comments, etc.)
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -122,25 +121,29 @@ func NewElement(tag string) *Element {
 // Text returns the characters immediately following the element's
 // opening tag.
 func (e *Element) Text() string {
-	if e.text == nil {
+	if len(e.Child) == 0 {
 		return ""
+	}
+	if cd, ok := e.Child[0].(*CharData); ok {
+		return cd.Data
 	} else {
-		return e.text.Data
+		return ""
 	}
 }
 
 // SetText replaces an element's subsidiary CharData text with a new
 // string.
 func (e *Element) SetText(text string) {
-	if e.text == nil {
-		e.Child = append(e.Child, nil)
-		copy(e.Child[1:], e.Child[0:])
-		c := newCharData(text, false)
-		e.Child[0] = c
-		e.text = c
-	} else {
-		e.text.Data = text
+	if len(e.Child) > 0 {
+		if cd, ok := e.Child[0].(*CharData); ok {
+			cd.Data = text
+			return
+		}
 	}
+	e.Child = append(e.Child, nil)
+	copy(e.Child[1:], e.Child[0:])
+	c := newCharData(text, false)
+	e.Child[0] = c
 }
 
 // CreateElement creates a child element of the receiving element and
@@ -171,7 +174,6 @@ func (s *elementStack) peek() *Element {
 // a new child of the receiving element.
 func (e *Element) ReadFrom(r io.Reader) error {
 	stack := elementStack{e}
-	var textPtr **CharData
 	dec := xml.NewDecoder(r)
 	for {
 		t, err := dec.RawToken()
@@ -193,16 +195,11 @@ func (e *Element) ReadFrom(r io.Reader) error {
 				e.CreateAttr(a.Name.Local, a.Value)
 			}
 			stack.push(e)
-			textPtr = &e.text
 		case xml.EndElement:
 			stack.pop()
-			textPtr = nil
 		case xml.CharData:
 			data := string(t)
-			cd := top.createCharData(data, isWhitespace(data))
-			if textPtr != nil {
-				*textPtr = cd
-			}
+			top.createCharData(data, isWhitespace(data))
 		case xml.Comment:
 			top.CreateComment(string(t))
 		case xml.ProcInst:
@@ -349,9 +346,6 @@ func (e *Element) CreateCharData(data string) *CharData {
 func (e *Element) createCharData(data string, whitespace bool) *CharData {
 	c := newCharData(data, whitespace)
 	e.addChild(c)
-	if !whitespace {
-		e.text = c
-	}
 	return c
 }
 
