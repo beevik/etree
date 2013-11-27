@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	NoIndent = -1
+	NoIndent = -1 // Use with SetIndent to turn off indenting
 )
 
 var (
@@ -32,9 +32,10 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
-	Tag   string  // The element tag
-	Attr  []Attr  // The element's list of key-value attribute pairs
-	Child []Token // The element's child tokens (elements, comments, etc.)
+	Tag    string   // The element tag
+	Attr   []Attr   // The element's list of key-value attribute pairs
+	Child  []Token  // The element's child tokens (elements, comments, etc.)
+	Parent *Element // The element's parent element
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -70,7 +71,7 @@ func NewDocument() *Document {
 // ReadFrom reads XML from the reader r and adds the result as
 // a new child of the receiving document.
 func (d *Document) ReadFrom(r io.Reader) error {
-	return d.Element.ReadFrom(r)
+	return d.Element.readFrom(r)
 }
 
 // WriteTo serializes an XML document into the writer w.
@@ -107,17 +108,6 @@ func (d *Document) Indent(spaces int) {
 	d.Child = newChild
 }
 
-// NewElement creates an XML element with the specified name.
-// In most cases, you should use NewDocument and create elements
-// with the CreateElement function.
-func NewElement(tag string) *Element {
-	return &Element{
-		Tag:   tag,
-		Attr:  make([]Attr, 0),
-		Child: make([]Token, 0),
-	}
-}
-
 // Text returns the characters immediately following the element's
 // opening tag.
 func (e *Element) Text() string {
@@ -148,13 +138,18 @@ func (e *Element) SetText(text string) {
 
 // CreateElement creates a child element of the receiving element and
 // gives it the specified name.
-func (e *Element) CreateElement(name string) *Element {
-	c := NewElement(name)
+func (e *Element) CreateElement(tag string) *Element {
+	c := &Element{
+		Tag:    tag,
+		Attr:   make([]Attr, 0),
+		Child:  make([]Token, 0),
+		Parent: e,
+	}
 	e.addChild(c)
 	return c
 }
 
-// An element stack is a simple stack of elements used by ReadFrom.
+// An element stack is a simple stack of elements used by readFrom.
 type elementStack []*Element
 
 func (s *elementStack) push(e *Element) {
@@ -172,7 +167,7 @@ func (s *elementStack) peek() *Element {
 
 // ReadFrom reads XML from the reader r and stores the result as
 // a new child of the receiving element.
-func (e *Element) ReadFrom(r io.Reader) error {
+func (e *Element) readFrom(r io.Reader) error {
 	stack := elementStack{e}
 	dec := xml.NewDecoder(r)
 	for {
@@ -208,29 +203,45 @@ func (e *Element) ReadFrom(r io.Reader) error {
 	}
 }
 
-// WriteTo serializes the element and its children as XML into
-// the writer w.
-func (e *Element) WriteTo(w io.Writer) error {
-	b := bufio.NewWriter(w)
-	e.writeTo(b)
-	return b.Flush()
-}
-
 // SelectAttr finds an element attribute matching the requested key
-// and returns its value if found.
-func (e *Element) SelectAttr(key string) (value string, found bool) {
+// and returns it if found.
+func (e *Element) SelectAttr(key string) *Attr {
 	for _, a := range e.Attr {
 		if a.Key == key {
-			return a.Value, true
+			return &a
 		}
 	}
-	return "", false
+	return nil
+}
+
+// SelectAttrValue finds an element attribute matching the requested key
+// and returns its value if found.  If it is not found, the dflt value
+// is returned instead.
+func (e *Element) SelectAttrValue(key, dflt string) string {
+	for _, a := range e.Attr {
+		if a.Key == key {
+			return a.Value
+		}
+	}
+	return dflt
+}
+
+// ChildElements returns all elements that are children of the
+// receiving element.
+func (e *Element) ChildElements() []*Element {
+	elements := make([]*Element, 0)
+	for _, t := range e.Child {
+		if c, ok := t.(*Element); ok {
+			elements = append(elements, c)
+		}
+	}
+	return elements
 }
 
 // SelectElement returns the first child element with the given tag.
 func (e *Element) SelectElement(tag string) *Element {
-	for _, ce := range e.Child {
-		if c, ok := ce.(*Element); ok && c.Tag == tag {
+	for _, t := range e.Child {
+		if c, ok := t.(*Element); ok && c.Tag == tag {
 			return c
 		}
 	}
@@ -240,23 +251,19 @@ func (e *Element) SelectElement(tag string) *Element {
 // SelectElements returns a slice of all child elements with the given tag.
 func (e *Element) SelectElements(tag string) []*Element {
 	elements := make([]*Element, 0)
-	for _, ce := range e.Child {
-		if c, ok := ce.(*Element); ok && c.Tag == tag {
+	for _, t := range e.Child {
+		if c, ok := t.(*Element); ok && c.Tag == tag {
 			elements = append(elements, c)
 		}
 	}
 	return elements
 }
 
-// ChildElements returns all elements that are children of the
-// receiving element.
-func (e *Element) ChildElements() []*Element {
+// FindElements finds all elements matching the XPath-like path string and
+// returns them in a slice.
+func (e *Element) FindElements(path string) []*Element {
 	elements := make([]*Element, 0)
-	for _, c := range e.Child {
-		if e, ok := c.(*Element); ok {
-			elements = append(elements, e)
-		}
-	}
+	// TODO: Write me
 	return elements
 }
 

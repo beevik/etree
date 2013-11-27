@@ -26,7 +26,7 @@ func Example() {
 	// <?xml version="1.0" encoding="UTF-8"?>
 	// <?xml-stylesheet type="text/xsl" href="style.xsl"?>
 	// <People>
-	//   <!-- These are all known people -->
+	//   <!--These are all known people-->
 	//   <Person name="Jon"/>
 	//   <Person name="Sally"/>
 	// </People>
