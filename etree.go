@@ -176,22 +176,6 @@ func (e *Element) CreateElement(tag string) *Element {
 	return c
 }
 
-// An element stack is a simple stack of elements used by readFrom.
-type elementStack []*Element
-
-func (s *elementStack) push(e *Element) {
-	*s = append(*s, e)
-}
-
-func (s *elementStack) pop() {
-	(*s)[len(*s)-1] = nil
-	*s = (*s)[:len(*s)-1]
-}
-
-func (s *elementStack) peek() *Element {
-	return (*s)[len(*s)-1]
-}
-
 // ReadFrom reads XML from the reader r and stores the result as
 // a new child of the receiving element.
 func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
@@ -290,9 +274,8 @@ func (e *Element) SelectElements(tag string) []*Element {
 // FindElements finds all elements matching the XPath-like path string and
 // returns them in a slice.
 func (e *Element) FindElements(path string) []*Element {
-	elements := make([]*Element, 0)
-	// TODO: Write me
-	return elements
+	p := newPather()
+	return p.traverse(e, path)
 }
 
 // Indent modifies the element's element tree by inserting

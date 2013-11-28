@@ -31,6 +31,28 @@ import (
 	"io"
 )
 
+// An element stack is a simple stack of elements used by readFrom.
+type elementStack []*Element
+
+func (s *elementStack) empty() bool {
+	return len(*s) == 0
+}
+
+func (s *elementStack) push(e *Element) {
+	*s = append(*s, e)
+}
+
+func (s *elementStack) pop() *Element {
+	e := (*s)[len(*s)-1]
+	(*s)[len(*s)-1] = nil
+	*s = (*s)[:len(*s)-1]
+	return e
+}
+
+func (s *elementStack) peek() *Element {
+	return (*s)[len(*s)-1]
+}
+
 // countReader implements a proxy reader that counts the number of
 // bytes read from its encapsulated reader.
 type countReader struct {
