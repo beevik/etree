@@ -234,9 +234,9 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 // SelectAttr finds an element attribute matching the requested key
 // and returns it if found.
 func (e *Element) SelectAttr(key string) *Attr {
-	for _, a := range e.Attr {
-		if a.Key == key {
-			return &a
+	for i := range e.Attr {
+		if e.Attr[i].Key == key {
+			return &e.Attr[i]
 		}
 	}
 	return nil
@@ -383,7 +383,12 @@ func (e *Element) addChild(t Token) {
 }
 
 // CreateAttr creates an attribute and adds it to the receiving element.
+// If an attribute with the key already exists, its value is replaced.
 func (e *Element) CreateAttr(key, value string) Attr {
+	if a := e.SelectAttr(key); a != nil {
+		a.Value = value
+		return *a
+	}
 	a := Attr{key, value}
 	e.Attr = append(e.Attr, a)
 	return a
