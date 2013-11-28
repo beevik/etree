@@ -27,6 +27,44 @@
 
 package etree
 
+import (
+	"io"
+)
+
+// countReader implements a proxy reader that counts the number of
+// bytes read from its encapsulated reader.
+type countReader struct {
+	r     io.Reader
+	bytes int64
+}
+
+func newCountReader(r io.Reader) *countReader {
+	return &countReader{r: r}
+}
+
+func (cr *countReader) Read(p []byte) (n int, err error) {
+	b, err := cr.r.Read(p)
+	cr.bytes += int64(b)
+	return b, err
+}
+
+// countWriter implements a proxy writer that counts the number of
+// bytes written by its encapsulated writer.
+type countWriter struct {
+	w     io.Writer
+	bytes int64
+}
+
+func newCountWriter(w io.Writer) *countWriter {
+	return &countWriter{w: w}
+}
+
+func (cw *countWriter) Write(p []byte) (n int, err error) {
+	b, err := cw.w.Write(p)
+	cw.bytes += int64(b)
+	return b, err
+}
+
 // escapeTable is a table of offsets into the escape substTable
 // for each ASCII character.  Zero represents no substitution.
 var escapeTable = [...]byte{

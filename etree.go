@@ -94,18 +94,22 @@ func NewDocument() *Document {
 }
 
 // ReadFrom reads XML from the reader r and adds the result as
-// a new child of the receiving document.
-func (d *Document) ReadFrom(r io.Reader) error {
+// a new child of the receiving document. It returns the number
+// of bytes read and any error encountered.
+func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	return d.Element.readFrom(r)
 }
 
-// WriteTo serializes an XML document into the writer w.
-func (d *Document) WriteTo(w io.Writer) error {
-	b := bufio.NewWriter(w)
+// WriteTo serializes an XML document into the writer w. It
+// returns the number of bytes written and any error encountered.
+func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
+	cw := newCountWriter(w)
+	b := bufio.NewWriter(cw)
 	for _, c := range d.Child {
 		c.writeTo(b)
 	}
-	return b.Flush()
+	err, n = b.Flush(), cw.bytes
+	return
 }
 
 // Indent modifies the document's element tree by inserting
@@ -190,18 +194,19 @@ func (s *elementStack) peek() *Element {
 
 // ReadFrom reads XML from the reader r and stores the result as
 // a new child of the receiving element.
-func (e *Element) readFrom(r io.Reader) error {
+func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 	stack := elementStack{e}
+	r := newCountReader(ri)
 	dec := xml.NewDecoder(r)
 	for {
 		t, err := dec.RawToken()
 		switch {
 		case err == io.EOF:
-			return nil
+			return r.bytes, nil
 		case err != nil:
-			return err
+			return r.bytes, err
 		case len(stack) == 0:
-			return ErrInvalidFormat
+			return r.bytes, ErrInvalidFormat
 		}
 
 		top := stack.peek()
