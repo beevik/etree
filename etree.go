@@ -45,14 +45,14 @@ var (
 )
 
 // A Token is an empty interface that represents an Element,
-// Comment, CharData, Directive or ProcInst.
+// Comment, CharData, or ProcInst.
 type Token interface {
 	writeTo(w *bufio.Writer)
 }
 
 // A Document is the root level object in an etree.  It represents the
 // XML document as a whole.  It embeds an Element type but only uses the
-// Element type's Child tokens.
+// its Child tokens.
 type Document struct {
 	Element
 }
@@ -60,7 +60,7 @@ type Document struct {
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
 	Tag    string   // The element tag
-	Attr   []Attr   // The element's list of key-value attribute pairs
+	Attr   []Attr   // The element's key-value attribute pairs
 	Child  []Token  // The element's child tokens (elements, comments, etc.)
 	Parent *Element // The element's parent element
 }
@@ -90,9 +90,7 @@ type ProcInst struct {
 
 // NewDocument creates an empty XML document and returns it.
 func NewDocument() *Document {
-	d := new(Document)
-	d.Child = make([]Token, 0)
-	return d
+	return &Document{Element{Child: make([]Token, 0)}}
 }
 
 // ReadFrom reads XML from the reader r and adds the result as
@@ -113,7 +111,7 @@ func (d *Document) WriteTo(w io.Writer) error {
 // Indent modifies the document's element tree by inserting
 // CharData entities containing carriage returns and indentation.
 // The amount of indenting per depth level is equal to spaces.
-// Use etree.NoIndent for spaces if you want no indentation at all.
+// Pass etree.NoIndent for spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
 	d.stripIndent()
 	n := len(d.Child)
@@ -143,9 +141,8 @@ func (e *Element) Text() string {
 	}
 	if cd, ok := e.Child[0].(*CharData); ok {
 		return cd.Data
-	} else {
-		return ""
 	}
+	return ""
 }
 
 // SetText replaces an element's subsidiary CharData text with a new
@@ -159,8 +156,7 @@ func (e *Element) SetText(text string) {
 	}
 	e.Child = append(e.Child, nil)
 	copy(e.Child[1:], e.Child[0:])
-	c := newCharData(text, false)
-	e.Child[0] = c
+	e.Child[0] = newCharData(text, false)
 }
 
 // CreateElement creates a child element of the receiving element and
@@ -498,7 +494,7 @@ func (i *ElementIterator) Valid() bool {
 func (i *ElementIterator) Next() {
 	for {
 		i.index++
-		if i.index == len(i.parent.Child) {
+		if i.index >= len(i.parent.Child) {
 			i.Element = nil
 			return
 		}
