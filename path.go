@@ -37,11 +37,31 @@ var (
 	errPath = errors.New("etree: invalid path")
 )
 
+// A Path is an object that represents an optimized version of an
+// XPath-like string.
+type Path struct {
+	segments []segment
+}
+
+// NewPath creates an optimized version of an XPath-like string that
+// can be used to query elements in an element tree.  Panics if an
+// invalid path string is supplied.
+func NewPath(path string) Path {
+	return Path{parsePath(path)}
+}
+
 // A segment is a portion of a path between "/" characters.
-// If contains one selector and zero or more [filters].
+// It contains one selector and zero or more [filters].
 type segment struct {
 	sel     selector
 	filters []filter
+}
+
+func (seg *segment) apply(e *Element, p *pather) {
+	seg.sel.apply(e, p)
+	for _, f := range seg.filters {
+		f.apply(p)
+	}
 }
 
 // A selector selects XML elements for consideration by the
@@ -56,21 +76,15 @@ type filter interface {
 	apply(p *pather)
 }
 
-func (seg *segment) apply(e *Element, p *pather) {
-	seg.sel.apply(e, p)
-	for _, f := range seg.filters {
-		f.apply(p)
-	}
-}
-
-// A pather is used to traverse an element tree, collecting results
-// that match a series of path selectors and filters.
+// A pather is helper object used to traverse an element tree with
+// a Path object.  It collects and deduplicates elements matching
+// the path query.
 type pather struct {
-	stack         []node
-	results       []*Element
-	inResults     map[*Element]bool
-	candidates    []*Element
-	candidatesAlt []*Element
+	stack      []node
+	results    []*Element
+	inResults  map[*Element]bool
+	candidates []*Element
+	scratch    []*Element // used by filters
 }
 
 // A node represents an element and the remaining path segments that
@@ -82,11 +96,11 @@ type node struct {
 
 func newPather() *pather {
 	return &pather{
-		stack:         make([]node, 0),
-		results:       make([]*Element, 0),
-		inResults:     make(map[*Element]bool),
-		candidates:    make([]*Element, 0),
-		candidatesAlt: make([]*Element, 0),
+		stack:      make([]node, 0),
+		results:    make([]*Element, 0),
+		inResults:  make(map[*Element]bool),
+		candidates: make([]*Element, 0),
+		scratch:    make([]*Element, 0),
 	}
 }
 
@@ -107,9 +121,8 @@ func (p *pather) empty() bool {
 // traverse follows the path from the element e, collecting
 // and then returning all elements that match the path's selectors
 // and filters.
-func (p *pather) traverse(e *Element, pathstr string) []*Element {
-	segments := parsePath(pathstr)
-	for p.push(node{e, segments}); !p.empty(); {
+func (p *pather) traverse(e *Element, path Path) []*Element {
+	for p.push(node{e, path.segments}); !p.empty(); {
 		p.eval(p.pop())
 	}
 	return p.results
@@ -200,7 +213,7 @@ func parseFilter(path string) filter {
 		case isInteger(path):
 			pos, _ := strconv.Atoi(path)
 			if pos == 0 {
-				pos = 1
+				pos = 1 // force to 1-based
 			}
 			return &filterPos{pos - 1}
 		default:
@@ -218,7 +231,6 @@ func parseFilter(path string) filter {
 			return &filterChildText{path[:eqindex], path[eqindex+2 : rindex]}
 		}
 	}
-	return nil
 }
 
 // selectSelf selects the current element into the candidate list.
@@ -287,11 +299,11 @@ type filterPos struct {
 }
 
 func (f *filterPos) apply(p *pather) {
-	p.candidatesAlt = p.candidatesAlt[:0]
+	p.scratch = p.scratch[:0]
 	if f.index < len(p.candidates) {
-		p.candidatesAlt = append(p.candidatesAlt, p.candidates[f.index])
+		p.scratch = append(p.scratch, p.candidates[f.index])
 	}
-	p.candidates = p.candidatesAlt
+	p.candidates = p.scratch
 }
 
 // filterAttr filters the candidate list for elements having
@@ -301,13 +313,13 @@ type filterAttr struct {
 }
 
 func (f *filterAttr) apply(p *pather) {
-	p.candidatesAlt = p.candidatesAlt[:0]
+	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		if a := c.SelectAttr(f.attr); a != nil {
-			p.candidatesAlt = append(p.candidatesAlt, c)
+			p.scratch = append(p.scratch, c)
 		}
 	}
-	p.candidates = p.candidatesAlt
+	p.candidates = p.scratch
 }
 
 // filterAttrVal filters the candidate list for elements having
@@ -317,13 +329,13 @@ type filterAttrVal struct {
 }
 
 func (f *filterAttrVal) apply(p *pather) {
-	p.candidatesAlt = p.candidatesAlt[:0]
+	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		if a := c.SelectAttr(f.attr); a != nil && a.Value == f.val {
-			p.candidatesAlt = append(p.candidatesAlt, c)
+			p.scratch = append(p.scratch, c)
 		}
 	}
-	p.candidates = p.candidatesAlt
+	p.candidates = p.scratch
 }
 
 // filterChild filters the candidate list for elements having
@@ -333,15 +345,15 @@ type filterChild struct {
 }
 
 func (f *filterChild) apply(p *pather) {
-	p.candidatesAlt = p.candidatesAlt[:0]
+	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag {
-				p.candidatesAlt = append(p.candidatesAlt, c)
+				p.scratch = append(p.scratch, c)
 			}
 		}
 	}
-	p.candidates = p.candidatesAlt
+	p.candidates = p.scratch
 }
 
 // filterChildText filters the candidate list for elements having
@@ -351,13 +363,13 @@ type filterChildText struct {
 }
 
 func (f *filterChildText) apply(p *pather) {
-	p.candidatesAlt = p.candidatesAlt[:0]
+	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag && cc.Text() == f.text {
-				p.candidatesAlt = append(p.candidatesAlt, c)
+				p.scratch = append(p.scratch, c)
 			}
 		}
 	}
-	p.candidates = p.candidatesAlt
+	p.candidates = p.scratch
 }

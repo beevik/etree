@@ -271,9 +271,33 @@ func (e *Element) SelectElements(tag string) []*Element {
 	return elements
 }
 
-// FindElements finds all elements matching the XPath-like path string and
-// returns them in a slice.
+// FindElement returns the first element matched by the XPath-like
+// path string. Panics if an invalid path string is supplied.
+func (e *Element) FindElement(path string) *Element {
+	return e.FindElementPath(NewPath(path))
+}
+
+// FindElementPath returns the first element matched by the XPath-like
+// path string.
+func (e *Element) FindElementPath(path Path) *Element {
+	p := newPather()
+	elements := p.traverse(e, path)
+	switch {
+	case len(elements) > 0:
+		return elements[0]
+	default:
+		return nil
+	}
+}
+
+// FindElements returns a slice of elements matched by the XPath-like
+// path string. Panics if an invalid path string is supplied.
 func (e *Element) FindElements(path string) []*Element {
+	return e.FindElementsPath(NewPath(path))
+}
+
+// FindElementsPath returns a slice of elements matched by the Path object.
+func (e *Element) FindElementsPath(path Path) []*Element {
 	p := newPather()
 	return p.traverse(e, path)
 }
