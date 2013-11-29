@@ -117,24 +117,7 @@ func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 // The amount of indenting per depth level is equal to spaces.
 // Pass etree.NoIndent for spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
-	d.stripIndent()
-	n := len(d.Child)
-	if n == 0 {
-		return
-	}
-
-	newChild := make([]Token, n*2-1)
-	for i, c := range d.Child {
-		j := i * 2
-		newChild[j] = c
-		if j+1 < len(newChild) {
-			newChild[j+1] = newIndentCharData(0, spaces)
-		}
-		if e, ok := c.(*Element); ok {
-			e.indent(1, spaces)
-		}
-	}
-	d.Child = newChild
+	d.Element.indent(0, spaces)
 }
 
 // Text returns the characters immediately following the element's
@@ -161,6 +144,11 @@ func (e *Element) SetText(text string) {
 	e.Child = append(e.Child, nil)
 	copy(e.Child[1:], e.Child[0:])
 	e.Child[0] = newCharData(text, false)
+}
+
+// AddElement adds the element c as a child of element e.
+func (e *Element) AddElement(c *Element) {
+	e.addChild(c)
 }
 
 // CreateElement creates a child element of the receiving element and
@@ -302,14 +290,6 @@ func (e *Element) FindElementsPath(path Path) []*Element {
 	return p.traverse(e, path)
 }
 
-// Indent modifies the element's element tree by inserting
-// CharData entities containing carriage returns and indentation.
-// The amount of indenting per depth level is equal to spaces.
-// Use etree.NoIndent for spaces if you want no indentation at all.
-func (e *Element) Indent(spaces int) {
-	e.indent(1, spaces)
-}
-
 // indent recursively inserts proper indentation between an
 // XML element's child tokens.
 func (e *Element) indent(depth, spaces int) {
@@ -322,9 +302,9 @@ func (e *Element) indent(depth, spaces int) {
 	oldChild := e.Child
 	e.Child = make([]Token, 0, n*2+1)
 	isCharData := false
-	for _, c := range oldChild {
+	for i, c := range oldChild {
 		_, isCharData = c.(*CharData)
-		if !isCharData && spaces >= 0 {
+		if !isCharData && spaces >= 0 && !(i == 0 && depth == 0) {
 			e.addChild(newIndentCharData(depth, spaces))
 		}
 		e.addChild(c)

@@ -32,7 +32,7 @@ import (
 	"strings"
 )
 
-// An element stack is a simple stack of elements used by readFrom.
+// An element stack is a simple stack of elements.
 type elementStack []*Element
 
 func (s *elementStack) empty() bool {
@@ -88,39 +88,17 @@ func (cw *countWriter) Write(p []byte) (n int, err error) {
 	return b, err
 }
 
-// escapeTable is a table of offsets into the escape substTable
-// for each ASCII character.  Zero represents no substitution.
-var escapeTable = [...]byte{
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 1, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 5,
-}
-
-var substTable = [...][]byte{
-	{'&', 'q', 'u', 'o', 't', ';'}, // 1 "
-	{'&', 'a', 'm', 'p', ';'},      // 2 &
-	{'&', 'a', 'p', 'o', 's', ';'}, // 3 '
-	{'&', 'l', 't', ';'},           // 4 <
-	{'&', 'g', 't', ';'},           // 5 >
-}
+var xmlReplacer = strings.NewReplacer(
+	"<", "&lt;",
+	">", "&gt;",
+	"&", "&amp;",
+	"'", "&apos;",
+	`"`, "&quot",
+)
 
 // escape generates an escaped XML string.
 func escape(s string) string {
-	buf := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
-		if c := s[i]; int(c) < len(escapeTable) && escapeTable[c] > 0 {
-			buf = append(buf, substTable[escapeTable[c]-1]...)
-		} else {
-			buf = append(buf, c)
-		}
-	}
-	switch {
-	case len(s) == len(buf):
-		return s
-	default:
-		return string(buf)
-	}
+	return xmlReplacer.Replace(s)
 }
 
 // isWhitespace returns true if the byte slice contains only
@@ -139,14 +117,17 @@ var crsp = "\n                                                                  
 // crSpaces returns a carriage return followed by n spaces. It's used
 // to generate XML indentations.
 func crSpaces(n int) string {
-	if n+1 > len(crsp) {
+	switch {
+	case n < 0:
+		return crsp[:1]
+	case n+1 > len(crsp):
 		buf := make([]byte, n+1)
 		buf[0] = '\n'
 		for i := 1; i < n+1; i++ {
 			buf[i] = ' '
 		}
 		return string(buf)
-	} else {
+	default:
 		return crsp[:n+1]
 	}
 }
@@ -162,9 +143,10 @@ func nextIndex(s, sep string, offset int) int {
 	}
 }
 
+// isInteger returns true if the string s contains an integer.
 func isInteger(s string) bool {
 	for i := 0; i < len(s); i++ {
-		if s[i] < '0' || s[i] > '9' {
+		if (s[i] < '0' || s[i] > '9') && !(i == 0 && s[i] == '-') {
 			return false
 		}
 	}
