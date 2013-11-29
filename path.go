@@ -28,217 +28,218 @@
 package etree
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 )
 
-const (
-	selectSelf                       = iota // "."
-	selectParent                            // ".."
-	selectChildrenAll                       // "*"
-	selectChildrenAllRecursive              // ""
-	selectChildrenWithTag                   // "tag"
-	selectChildrenContainingTag             // "tag[tag2]"
-	selectChildrenContainingTagValue        // "tag[tag2='val']"
-	selectChildrenWithAttr                  // "tag[@attr]"
-	selectChildrenWithAttrValue             // "tag[@attr='val']"
+var (
+	errPath = errors.New("etree: invalid path")
 )
 
-// A selector describes the selection criteria for a path segment.
-type selector struct {
-	Type  int
-	Tag   string
-	CTag  string
-	CAttr string
-	Value string
+// A segment is a portion of a path between "/" characters.
+// If contains one selector and zero or more [filters].
+type segment struct {
+	sel     selector
+	filters []filter
 }
 
-// getSelector converts a segment string into a selector object.
-func getSelector(seg string) selector {
-	switch seg {
-	case "":
-		return selector{Type: selectChildrenAllRecursive}
-	case ".":
-		return selector{Type: selectSelf}
-	case "..":
-		return selector{Type: selectParent}
-	case "*":
-		return selector{Type: selectChildrenAll}
-	}
+// A selector selects XML elements for consideration by the
+// path traversal.
+type selector interface {
+	apply(e *Element, p *pather)
+}
 
-	// Find subselector between in [brackets]
-	var tag, subselector string
-	lindex := strings.IndexByte(seg, '[')
-	rindex := strings.IndexByte(seg, ']')
-	if lindex > -1 && rindex > -1 && rindex > lindex {
-		tag, subselector = seg[0:lindex], seg[lindex+1:rindex]
-	}
+// A filter pares down a list of candidate XML elements based
+// on a path filter in [brackets].
+type filter interface {
+	apply(p *pather)
+}
 
-	// No subselector? Must be a simple child tag selector
-	if subselector == "" {
-		return selector{Type: selectChildrenWithTag, Tag: seg}
+func (seg *segment) apply(e *Element, p *pather) {
+	seg.sel.apply(e, p)
+	for _, f := range seg.filters {
+		f.apply(p)
 	}
-
-	// Key-value subselector? (e.g., [key='value'])
-	eqindex := strings.Index(subselector, "='")
-	if eqindex > -1 {
-		var key, value string
-		rqindex := strings.IndexByte(subselector[eqindex+2:], '\'')
-		if rqindex > -1 {
-			key, value = subselector[0:eqindex], subselector[eqindex+2:eqindex+2+rqindex]
-		}
-		if len(key) > 0 && key[0] == '@' {
-			return selector{
-				Type:  selectChildrenWithAttrValue,
-				Tag:   tag,
-				CAttr: key[1:],
-				Value: value,
-			}
-		} else {
-			return selector{
-				Type:  selectChildrenContainingTagValue,
-				Tag:   tag,
-				CTag:  key,
-				Value: value,
-			}
-		}
-	}
-
-	// Must be a simple key selector (e.g., [key])
-	if len(subselector) > 0 && subselector[0] == '@' {
-		return selector{
-			Type:  selectChildrenWithAttr,
-			Tag:   tag,
-			CAttr: subselector[1:],
-		}
-	} else {
-		return selector{
-			Type: selectChildrenContainingTag,
-			Tag:  tag,
-			CTag: subselector,
-		}
-	}
-
 }
 
 // A pather is used to traverse an element tree, collecting results
-// that match a series of path selectors.
+// that match a series of path selectors and filters.
 type pather struct {
-	results    []*Element        // list of elements matching path query
-	stack      []pathNode        // stack for traversing element tree
-	candidates []*Element        // scratch array used during traversal
-	inResults  map[*Element]bool // tracks which elements are in results
+	stack      []node
+	results    []*Element
+	inResults  map[*Element]bool
+	candidates []*Element
 }
 
-// A pathNode represents an element and the remaining path that
+// A node represents an element and the remaining path segments that
 // should be applied against it by the pather.
-type pathNode struct {
-	e    *Element // current element
-	path string   // path to apply against current element
+type node struct {
+	e        *Element
+	segments []segment
 }
 
 func newPather() *pather {
 	return &pather{
+		stack:      make([]node, 0),
 		results:    make([]*Element, 0),
-		stack:      make([]pathNode, 0, 1),
-		candidates: make([]*Element, 0, 1),
 		inResults:  make(map[*Element]bool),
+		candidates: make([]*Element, 0),
 	}
+}
+
+func (p *pather) push(n node) {
+	p.stack = append(p.stack, n)
+}
+
+func (p *pather) pop() node {
+	n := p.stack[len(p.stack)-1]
+	p.stack = p.stack[:len(p.stack)-1]
+	return n
 }
 
 func (p *pather) empty() bool {
 	return len(p.stack) == 0
 }
 
-func (p *pather) push(n pathNode) {
-	p.stack = append(p.stack, n)
-}
-
-func (p *pather) pop() pathNode {
-	n := p.stack[len(p.stack)-1]
-	p.stack = p.stack[0 : len(p.stack)-1]
-	return n
-}
-
 // traverse follows the path from the element e, collecting
-// and then returning all elements that match the path's selectors.
-func (p *pather) traverse(e *Element, path string) []*Element {
-	for p.push(pathNode{e, path}); !p.empty(); {
+// and then returning all elements that match the path's selectors
+// and filters.
+func (p *pather) traverse(e *Element, pathstr string) []*Element {
+	segments := parsePath(pathstr)
+	for p.push(node{e, segments}); !p.empty(); {
 		p.eval(p.pop())
 	}
 	return p.results
 }
 
-// eval evalutes the current path node by applying the remaining path's
-// selector rules against the node's element.
-func (p *pather) eval(n pathNode) {
-	p.candidates = p.candidates[:0]
-	seg, remain := getNextSegment(n.path)
+// eval evalutes the current path node by applying the remaining
+// path's selector rules against the node's element.
+func (p *pather) eval(n node) {
+	p.candidates = p.candidates[0:0]
+	seg, remain := n.segments[0], n.segments[1:]
+	seg.apply(n.e, p)
 
-	// Gather all candidate elements that match the current segment
-	selector := getSelector(seg)
-	switch selector.Type {
-	case selectSelf:
-		p.candidates = append(p.candidates, n.e)
-	case selectParent:
-		p.addParent(n.e)
-	case selectChildrenAll:
-		p.addChildrenAll(n.e)
-	case selectChildrenAllRecursive:
-		p.addChildrenAllRecursive(n.e)
-	case selectChildrenWithTag:
-		p.addChildrenWithTag(n.e, &selector)
-	case selectChildrenContainingTag:
-		p.addChildrenContainingTag(n.e, &selector)
-	case selectChildrenContainingTagValue:
-		p.addChildrenContainingTagValue(n.e, &selector)
-	case selectChildrenWithAttr:
-		p.addChildrenWithAttr(n.e, &selector)
-	case selectChildrenWithAttrValue:
-		p.addChildrenWithAttrValue(n.e, &selector)
-	}
-
-	// No path remaining? Then add the candidates to the result set.
-	// Otherwise push the candidates on the stack along with the
-	// remaining path.
-	if remain == "" {
+	if len(remain) == 0 {
 		for _, c := range p.candidates {
 			if in := p.inResults[c]; !in {
-				p.results = append(p.results, c)
 				p.inResults[c] = true
+				p.results = append(p.results, c)
 			}
 		}
 	} else {
 		for _, c := range p.candidates {
-			p.push(pathNode{c, remain})
+			p.push(node{c, remain})
 		}
 	}
 }
 
-// getNextSegment splits the path into the next segment and the remaining
-// path.
-func getNextSegment(path string) (segment, remain string) {
-	if i := strings.IndexByte(path, '/'); i > -1 {
-		return path[0:i], path[i+1:]
+// parsePath parses an XPath-like string describing a path
+// through an element tree and returns a slice of segment
+// descriptors.
+func parsePath(path string) []segment {
+	// Path can start with //, but not /
+	if strings.HasPrefix(path, "//") {
+		path = path[1:]
+	} else if strings.HasPrefix(path, "/") {
+		panic(errPath)
 	}
-	return path, ""
+
+	segments := make([]segment, 0)
+	for _, s := range strings.Split(path, "/") {
+		segments = append(segments, parseSegment(s))
+	}
+	return segments
 }
 
-// matchTag returns true if the element's tag matches the selector's
-// tag.  A selector tag of "*" matches any element tag.
-func matchTag(eTag, sTag string) bool {
-	return sTag == "*" || eTag == sTag
+// parseSegment parses a path segment between / characters.
+func parseSegment(path string) segment {
+	pieces := strings.Split(path, "[")
+	seg := segment{
+		sel:     parseSelector(pieces[0]),
+		filters: make([]filter, 0),
+	}
+	for i := 1; i < len(pieces); i++ {
+		fpath := pieces[i]
+		if fpath[len(fpath)-1] != ']' {
+			panic(errPath)
+		}
+		seg.filters = append(seg.filters, parseFilter(fpath[:len(fpath)-1]))
+	}
+	return seg
 }
 
-// addParent adds the selectParent of the element to the candidate list.
-func (p *pather) addParent(e *Element) {
+// parseSelector parses a selector at the start of a path segment.
+func parseSelector(path string) selector {
+	switch path {
+	case ".":
+		return new(selectSelf)
+	case "..":
+		return new(selectParent)
+	case "*":
+		return new(selectChildren)
+	case "":
+		return new(selectDescendants)
+	default:
+		return &selectChildrenTag{path}
+	}
+}
+
+// parseFilter parses a path filter contained within [brackets].
+func parseFilter(path string) filter {
+	if len(path) == 0 {
+		panic(errPath)
+	}
+	eqindex := strings.Index(path, "='")
+	if eqindex == -1 {
+		switch {
+		case path[0] == '@':
+			return &filterAttr{path[1:]}
+		case isInteger(path):
+			pos, _ := strconv.Atoi(path)
+			if pos == 0 {
+				pos = 1
+			}
+			return &filterPos{pos - 1}
+		default:
+			return &filterChild{path}
+		}
+	} else {
+		rindex := nextIndex(path, "'", eqindex+2)
+		if rindex != len(path)-1 {
+			panic(errPath)
+		}
+		switch {
+		case path[0] == '@':
+			return &filterAttrVal{path[1:eqindex], path[eqindex+2 : rindex]}
+		default:
+			return &filterChildText{path[:eqindex], path[eqindex+2 : rindex]}
+		}
+	}
+	return nil
+}
+
+// selectSelf selects the current element into the candidate list.
+type selectSelf struct{}
+
+func (s *selectSelf) apply(e *Element, p *pather) {
+	p.candidates = append(p.candidates, e)
+}
+
+// selectParent selects the element's parent into the candidate list.
+type selectParent struct{}
+
+func (s *selectParent) apply(e *Element, p *pather) {
 	if e.Parent != nil {
 		p.candidates = append(p.candidates, e.Parent)
 	}
 }
 
-// addChildrenAll adds all direct children of the element to the
+// selectChildren selects the element's child elements into the
 // candidate list.
-func (p *pather) addChildrenAll(e *Element) {
+type selectChildren struct{}
+
+func (s *selectChildren) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
 		if c, ok := c.(*Element); ok {
 			p.candidates = append(p.candidates, c)
@@ -246,86 +247,115 @@ func (p *pather) addChildrenAll(e *Element) {
 	}
 }
 
-// addChildrenAllRecursive adds the element to the candidate list.  It then
-// performs a depth-first search, adding all subelements below the element
-// to the candidate list.
-func (p *pather) addChildrenAllRecursive(e *Element) {
-	s := elementStack{e}
-	for !s.empty() {
-		e := s.pop()
+// selectDescendants selects all descendant child elements
+// of the element into the candidate list.
+type selectDescendants struct{}
+
+func (s *selectDescendants) apply(e *Element, p *pather) {
+	stack := elementStack{e}
+	for !stack.empty() {
+		e := stack.pop()
 		p.candidates = append(p.candidates, e)
-		for _, t := range e.Child {
-			if ce, ok := t.(*Element); ok {
-				s.push(ce)
+		for _, c := range e.Child {
+			if c, ok := c.(*Element); ok {
+				p.candidates = append(p.candidates, c)
 			}
 		}
 	}
 }
 
-// addChildrenWithTag adds to the candidate list all direct children of
-// e with tag selector.Tag.
-func (p *pather) addChildrenWithTag(e *Element, s *selector) {
+// selectChildrenTag selects into the candidate list all child
+// elements of the element having the specified tag.
+type selectChildrenTag struct {
+	tag string
+}
+
+func (s *selectChildrenTag) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && matchTag(c.Tag, s.Tag) {
+		if c, ok := c.(*Element); ok && c.Tag == s.tag {
 			p.candidates = append(p.candidates, c)
 		}
 	}
 }
 
-// addChildrenContainingTag adds to the candidate list all direct
-// children of e containing a child element with tag selector.Tag
-// and a grandchild element with tag selector.CTag.
-func (p *pather) addChildrenContainingTag(e *Element, s *selector) {
-	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && matchTag(c.Tag, s.Tag) {
-			for _, cc := range c.Child {
-				if cc, ok := cc.(*Element); ok && matchTag(cc.Tag, s.CTag) {
-					p.candidates = append(p.candidates, c)
-				}
-			}
-		}
-	}
+// filterPos filters the candidate list, keeping only the
+// candidate at the specified index.
+type filterPos struct {
+	index int
 }
 
-// addChildrenContainingTagValue adds to the candidate list all direct
-// children of e containing a child element with tag selector.Tag
-// and a grandchild element with tag selector.CTag with a text value
-// of s.Value.
-func (p *pather) addChildrenContainingTagValue(e *Element, s *selector) {
-	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && matchTag(c.Tag, s.Tag) {
-			for _, cc := range c.Child {
-				if cc, ok := cc.(*Element); ok && matchTag(cc.Tag, s.CTag) && cc.Text() == s.Value {
-					p.candidates = append(p.candidates, c)
-				}
-			}
-		}
+func (f *filterPos) apply(p *pather) {
+	result := make([]*Element, 0)
+	if f.index < len(p.candidates) {
+		result = append(result, p.candidates[f.index])
 	}
+	p.candidates = result
 }
 
-// addChildrenWithAttr adds to the candidate list all direct
-// children of e containing a child element with tag selector.Tag
-// and an attribute named selector.CAttr.
-func (p *pather) addChildrenWithAttr(e *Element, s *selector) {
-	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && matchTag(c.Tag, s.Tag) {
-			if a := c.SelectAttr(s.CAttr); a != nil {
-				p.candidates = append(p.candidates, c)
-			}
-		}
-	}
+// filterAttr filters the candidate list for elements having
+// the specified attribute.
+type filterAttr struct {
+	attr string
 }
 
-// addChildrenWithAttr adds to the candidate list all direct
-// children of e containing a child element with tag selector.Tag
-// and an attribute key-value pair with key= selector.CAttr and
-// value= selector.Value.
-func (p *pather) addChildrenWithAttrValue(e *Element, s *selector) {
-	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && matchTag(c.Tag, s.Tag) {
-			if a := c.SelectAttr(s.CAttr); a != nil && a.Value == s.Value {
-				p.candidates = append(p.candidates, c)
+func (f *filterAttr) apply(p *pather) {
+	result := make([]*Element, 0)
+	for _, c := range p.candidates {
+		if a := c.SelectAttr(f.attr); a != nil {
+			result = append(result, c)
+		}
+	}
+	p.candidates = result
+}
+
+// filterAttrVal filters the candidate list for elements having
+// the specified attribute with the specified value.
+type filterAttrVal struct {
+	attr, val string
+}
+
+func (f *filterAttrVal) apply(p *pather) {
+	result := make([]*Element, 0)
+	for _, c := range p.candidates {
+		if a := c.SelectAttr(f.attr); a != nil && a.Value == f.val {
+			result = append(result, c)
+		}
+	}
+	p.candidates = result
+}
+
+// filterChild filters the candidate list for elements having
+// a child element with the specified tag.
+type filterChild struct {
+	tag string
+}
+
+func (f *filterChild) apply(p *pather) {
+	result := make([]*Element, 0)
+	for _, c := range p.candidates {
+		for _, cc := range c.Child {
+			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag {
+				result = append(result, c)
 			}
 		}
 	}
+	p.candidates = result
+}
+
+// filterChildText filters the candidate list for elements having
+// a child element with the specified tag and text.
+type filterChildText struct {
+	tag, text string
+}
+
+func (f *filterChildText) apply(p *pather) {
+	result := make([]*Element, 0)
+	for _, c := range p.candidates {
+		for _, cc := range c.Child {
+			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag && cc.Text() == f.text {
+				result = append(result, c)
+			}
+		}
+	}
+	p.candidates = result
 }

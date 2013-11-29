@@ -29,6 +29,7 @@ package etree
 
 import (
 	"io"
+	"strings"
 )
 
 // An element stack is a simple stack of elements used by readFrom.
@@ -148,4 +149,24 @@ func crSpaces(n int) string {
 	} else {
 		return crsp[:n+1]
 	}
+}
+
+// nextIndex returns the index of the next occurrence of sep in s,
+// starting from offset.  It returns -1 if the sep string is not found.
+func nextIndex(s, sep string, offset int) int {
+	switch i := strings.Index(s[offset:], sep); i {
+	case -1:
+		return -1
+	default:
+		return offset + i
+	}
+}
+
+func isInteger(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
