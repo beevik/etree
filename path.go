@@ -80,7 +80,8 @@ type filter interface {
 // a Path object.  It collects and deduplicates elements matching
 // the path query.
 type pather struct {
-	stack      []node
+	queue      []node
+	qindex     int
 	results    []*Element
 	inResults  map[*Element]bool
 	candidates []*Element
@@ -96,7 +97,7 @@ type node struct {
 
 func newPather() *pather {
 	return &pather{
-		stack:      make([]node, 0),
+		queue:      make([]node, 0),
 		results:    make([]*Element, 0),
 		inResults:  make(map[*Element]bool),
 		candidates: make([]*Element, 0),
@@ -104,26 +105,35 @@ func newPather() *pather {
 	}
 }
 
-func (p *pather) push(n node) {
-	p.stack = append(p.stack, n)
+func (p *pather) add(n node) {
+	p.queue = append(p.queue, n)
 }
 
-func (p *pather) pop() node {
-	n := p.stack[len(p.stack)-1]
-	p.stack = p.stack[:len(p.stack)-1]
+func (p *pather) remove() node {
+	n := p.queue[p.qindex]
+	p.qindex++
+	if p.qindex > len(p.queue)/2 && p.qindex > 32 {
+		p.rebalance()
+	}
 	return n
 }
 
+func (p *pather) rebalance() {
+	count := len(p.queue) - p.qindex
+	copy(p.queue[:count], p.queue[p.qindex:])
+	p.queue, p.qindex = p.queue[:count], 0
+}
+
 func (p *pather) empty() bool {
-	return len(p.stack) == 0
+	return len(p.queue) == p.qindex
 }
 
 // traverse follows the path from the element e, collecting
 // and then returning all elements that match the path's selectors
 // and filters.
 func (p *pather) traverse(e *Element, path Path) []*Element {
-	for p.push(node{e, path.segments}); !p.empty(); {
-		p.eval(p.pop())
+	for p.add(node{e, path.segments}); !p.empty(); {
+		p.eval(p.remove())
 	}
 	return p.results
 }
@@ -144,7 +154,7 @@ func (p *pather) eval(n node) {
 		}
 	} else {
 		for _, c := range p.candidates {
-			p.push(node{c, remain})
+			p.add(node{c, remain})
 		}
 	}
 }
@@ -273,6 +283,7 @@ func (s *selectDescendants) apply(e *Element, p *pather) {
 		for _, c := range e.Child {
 			if c, ok := c.(*Element); ok {
 				p.candidates = append(p.candidates, c)
+				stack.push(c)
 			}
 		}
 	}

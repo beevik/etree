@@ -34,6 +34,8 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	"os"
+	"strings"
 )
 
 const (
@@ -93,11 +95,27 @@ func NewDocument() *Document {
 	return &Document{Element{Child: make([]Token, 0)}}
 }
 
-// ReadFrom reads XML from the reader r and adds the result as
-// a new child of the receiving document. It returns the number
-// of bytes read and any error encountered.
+// ReadFrom reads XML from the reader r into the document d.
+// It returns the number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	return d.Element.readFrom(r)
+}
+
+// ReadFromString reads XML from the string s into the document d.
+func (d *Document) ReadFromFile(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = d.ReadFrom(f)
+	return err
+}
+
+// ReadFromString reads XML from the string s into the document d.
+func (d *Document) ReadFromString(s string) error {
+	_, err := d.ReadFrom(strings.NewReader(s))
+	return err
 }
 
 // WriteTo serializes an XML document into the writer w. It
