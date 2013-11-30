@@ -31,6 +31,7 @@ package etree
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -112,6 +113,12 @@ func (d *Document) ReadFromFile(filename string) error {
 	return err
 }
 
+// ReadFromBytes reads XML from the byte slice b into the document d.
+func (d *Document) ReadFromBytes(b []byte) error {
+	_, err := d.ReadFrom(bytes.NewReader(b))
+	return err
+}
+
 // ReadFromString reads XML from the string s into the document d.
 func (d *Document) ReadFromString(s string) error {
 	_, err := d.ReadFrom(strings.NewReader(s))
@@ -127,6 +134,41 @@ func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 		c.writeTo(b)
 	}
 	err, n = b.Flush(), cw.bytes
+	return
+}
+
+// WriteToFile serializes an XML document into the file named
+// filename.
+func (d *Document) WriteToFile(filename string) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = d.WriteTo(f)
+	return err
+}
+
+// WriteToBytes serializes the XML document into a slice of
+// bytes.
+func (d *Document) WriteToBytes() (b []byte, err error) {
+	var buf bytes.Buffer
+	_, err = d.WriteTo(&buf)
+	if err != nil {
+		return
+	}
+	b = buf.Bytes()
+	return
+}
+
+// WriteToString serializes the XML document into a string.
+func (d *Document) WriteToString() (s string, err error) {
+	var b []byte
+	b, err = d.WriteToBytes()
+	if err != nil {
+		return
+	}
+	s = string(b)
 	return
 }
 
