@@ -163,10 +163,16 @@ func (p *pather) eval(n node) {
 // through an element tree and returns a slice of segment
 // descriptors.
 func parsePath(path string) []segment {
-	// Path can start with //, but not /
+	// If path starts or ends with //, add a .
 	if strings.HasPrefix(path, "//") {
-		path = path[1:]
-	} else if strings.HasPrefix(path, "/") {
+		path = "." + path
+	}
+	if strings.HasSuffix(path, "//") {
+		path = path + "."
+	}
+
+	// Paths cannot be absolute
+	if strings.HasPrefix(path, "/") {
 		panic(errPath)
 	}
 
@@ -215,21 +221,10 @@ func parseFilter(path string) filter {
 	if len(path) == 0 {
 		panic(errPath)
 	}
+
+	// Filter contains [@attr='val'] or [tag='val']?
 	eqindex := strings.Index(path, "='")
-	if eqindex == -1 {
-		switch {
-		case path[0] == '@':
-			return &filterAttr{path[1:]}
-		case isInteger(path):
-			pos, _ := strconv.Atoi(path)
-			if pos == 0 {
-				pos = 1 // force to 1-based
-			}
-			return &filterPos{pos - 1}
-		default:
-			return &filterChild{path}
-		}
-	} else {
+	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
 		if rindex != len(path)-1 {
 			panic(errPath)
@@ -240,6 +235,20 @@ func parseFilter(path string) filter {
 		default:
 			return &filterChildText{path[:eqindex], path[eqindex+2 : rindex]}
 		}
+	}
+
+	// Filter contains [@attr], [N] or [tag]
+	switch {
+	case path[0] == '@':
+		return &filterAttr{path[1:]}
+	case isInteger(path):
+		pos, _ := strconv.Atoi(path)
+		if pos == 0 {
+			pos = 1 // force to 1-based
+		}
+		return &filterPos{pos - 1}
+	default:
+		return &filterChild{path}
 	}
 }
 
@@ -276,13 +285,17 @@ func (s *selectChildren) apply(e *Element, p *pather) {
 type selectDescendants struct{}
 
 func (s *selectDescendants) apply(e *Element, p *pather) {
-	stack := elementStack{e}
+	stack := elementStack{}
+	for _, c := range e.Child {
+		if c, ok := c.(*Element); ok {
+			stack.push(c)
+		}
+	}
 	for !stack.empty() {
 		e := stack.pop()
 		p.candidates = append(p.candidates, e)
 		for _, c := range e.Child {
 			if c, ok := c.(*Element); ok {
-				p.candidates = append(p.candidates, c)
 				stack.push(c)
 			}
 		}
