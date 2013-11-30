@@ -85,6 +85,11 @@ type CharData struct {
 	whitespace bool
 }
 
+// A Directive represents an XML directive.
+type Directive struct {
+	Data string
+}
+
 // A ProcInst represents an XML processing instruction.
 type ProcInst struct {
 	Target string
@@ -257,6 +262,8 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 			top.createCharData(data, isWhitespace(data))
 		case xml.Comment:
 			top.CreateComment(string(t))
+		case xml.Directive:
+			top.CreateDirective(string(t))
 		case xml.ProcInst:
 			top.CreateProcInst(t.Target, string(t.Inst))
 		}
@@ -505,13 +512,33 @@ func (c *Comment) writeTo(w *bufio.Writer) {
 	w.WriteString("-->")
 }
 
+// newDirective creates a new XML directive.
+func newDirective(data string) *Directive {
+	return &Directive{Data: data}
+}
+
+// CreateDirective creates an XML directive and adds it as a
+// child of the receiving element.
+func (e *Element) CreateDirective(data string) *Directive {
+	d := newDirective(data)
+	e.addChild(d)
+	return d
+}
+
+// writeTo serializes the XML directive to the writer.
+func (d *Directive) writeTo(w *bufio.Writer) {
+	w.WriteString("<!")
+	w.WriteString(d.Data)
+	w.WriteString(">")
+}
+
 // newProcInst creates a new processing instruction.
 func newProcInst(target, inst string) *ProcInst {
 	return &ProcInst{Target: target, Inst: inst}
 }
 
 // CreateProcInst creates a processing instruction and adds it as a
-// child of the receiving element
+// child of the receiving element.
 func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 	p := newProcInst(target, inst)
 	e.addChild(p)
