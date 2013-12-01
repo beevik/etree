@@ -78,20 +78,30 @@ For the remaining examples, we will be using the following `bookstore.xml` docum
 </bookstore>
 ```
 
+###Example: Reading an XML file
+
+This example loads the bookstore sample XML from a file called `bookmark.xml`:
+```go
+doc := etree.NewDocument()
+if err := doc.ReadFromFile("bookstore.xml"); err != nil {
+    panic(err)
+}
+```
+
 ###Example: Processing elements and attributes
 
 This example processes the bookstore XML document with some simple element tree queries:
 ```go
-doc := etree.NewDocument()
-if err := doc.ReadFromFile("test.xml"); err != nil {
-    panic(err)
-}
-
 root := doc.SelectElement("bookstore")
 fmt.Println("ROOT element:", root.Tag)
 
 for _, book := range root.SelectElements("book") {
     fmt.Println("CHILD element:", book.Tag)
+    title := book.SelectElement("title")
+    if title != nil {
+        lang := title.SelectAttrValue("lang", "unknown")
+        fmt.Printf("  TITLE: %s (%s)\n", title.Text(), lang)
+    }
     for _, attr := range book.Attr {
         fmt.Printf("  ATTR: %s=%s\n", attr.Key, attr.Value)
     }
@@ -101,12 +111,16 @@ Output:
 ```
 ROOT element: bookstore
 CHILD element: book
+  TITLE: Everyday Italian (en)
   ATTR: category=COOKING
 CHILD element: book
+  TITLE: Harry Potter (en)
   ATTR: category=CHILDREN
 CHILD element: book
+  TITLE: XQuery Kick Start (en)
   ATTR: category=WEB
 CHILD element: book
+  TITLE: Learning XML (en)
   ATTR: category=WEB
 ```
 
@@ -114,10 +128,6 @@ CHILD element: book
 
 This example processes the bookstore XML document using Path queries:
 ```go
-doc := etree.NewDocument()
-if err := doc.ReadFromFile("bookstore.xml"); err != nil {
-    panic(err)
-}
 for _, t := range doc.FindElements("//book[@category='WEB']/title") {
     fmt.Println("Title:", t.Text())
 }
