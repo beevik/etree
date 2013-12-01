@@ -163,12 +163,12 @@ func (p *pather) eval(n node) {
 // through an element tree and returns a slice of segment
 // descriptors.
 func parsePath(path string) []segment {
-	// If path starts or ends with //, add a .
+	// If path starts or ends with //, fix it
 	if strings.HasPrefix(path, "//") {
 		path = "." + path
 	}
 	if strings.HasSuffix(path, "//") {
-		path = path + "."
+		path = path + "*"
 	}
 
 	// Paths cannot be absolute
@@ -176,6 +176,7 @@ func parsePath(path string) []segment {
 		panic(errPath)
 	}
 
+	// Split path into segment objects
 	segments := make([]segment, 0)
 	for _, s := range strings.Split(path, "/") {
 		segments = append(segments, parseSegment(s))
@@ -285,12 +286,7 @@ func (s *selectChildren) apply(e *Element, p *pather) {
 type selectDescendants struct{}
 
 func (s *selectDescendants) apply(e *Element, p *pather) {
-	stack := elementStack{}
-	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok {
-			stack.push(c)
-		}
-	}
+	stack := elementStack{e}
 	for !stack.empty() {
 		e := stack.pop()
 		p.candidates = append(p.candidates, e)
