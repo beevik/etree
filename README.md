@@ -26,18 +26,18 @@ doc.Indent(2)
 doc.WriteTo(os.Stdout)
 ```
 
-Here is the output of the program:
-```
-    <?xml version="1.0" encoding="UTF-8"?>
-    <?xml-stylesheet type="text/xsl" href="style.xsl"?>
-    <People>
-      <!--These are all known people-->
-      <Person name="Jon"/>
-      <Person name="Sally"/>
-    </People>
+Output
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<People>
+  <!--These are all known people-->
+  <Person name="Jon"/>
+  <Person name="Sally"/>
+</People>
 ```
 
-###Sample document source
+###Document used by remaining examples:
 
 For the remaining examples, we will be using the following `bookstore.xml` document as the source.
 ```xml
@@ -90,10 +90,10 @@ if err := doc.ReadFromFile("test.xml"); err != nil {
 root := doc.SelectElement("bookstore")
 fmt.Println("ROOT element:", root.Tag)
 
-for _, c := range root.ChildElements() {
-    fmt.Println("CHILD element:", c.Tag)
-    for _, a := range c.Attr {
-        fmt.Printf("  ATTR: %s=%s\n", a.Key, a.Value)
+for _, book := range root.SelectElements("book") {
+    fmt.Println("CHILD element:", book.Tag)
+    for _, attr := range book.Attr {
+        fmt.Printf("  ATTR: %s=%s\n", attr.Key, attr.Value)
     }
 }
 ```
@@ -108,4 +108,23 @@ CHILD element: book
   ATTR: category=WEB
 CHILD element: book
   ATTR: category=WEB
+```
+
+###Example: Path queries
+
+This example processes the bookstore XML document using Path queries:
+```go
+doc := etree.NewDocument()
+if err := doc.ReadFromFile("bookstore.xml"); err != nil {
+    panic(err)
+}
+for _, t := range doc.FindElements("//book[@category='WEB']/title") {
+    fmt.Println("Title:", t.Text())
+}
+```
+
+Output:
+```
+Title: XQuery Kick Start
+Title: Learning XML
 ```
