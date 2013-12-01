@@ -1,13 +1,17 @@
 etree
 =====
 
-A go package that builds an XML element tree and serializes it.
+The etree package is a go package that processes XML in the form of an element tree.
+Its design was inspired by the Python [ElementTree](http://docs.python.org/2/library/xml.etree.elementtree.html)
+module.
 
-See http://godoc.org/github.com/beevik/etree for documentation.
+See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
+documentation.
 
 ###Example: Creating an XML document
 
-The following example creates an XML document using the etree package and outputs it to stdout:
+The following example creates an XML document from scratch using the etree
+package and outputs its indented contents to stdout:
 ```go
 doc := etree.NewDocument()
 doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -26,7 +30,7 @@ doc.Indent(2)
 doc.WriteTo(os.Stdout)
 ```
 
-Output
+Output:
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="style.xsl"?>
@@ -37,9 +41,10 @@ Output
 </People>
 ```
 
-###Document used by remaining examples:
+###Document used by remaining examples
 
-For the remaining examples, we will be using the following `bookstore.xml` document as the source.
+All remaining examples will use the following `bookstore.xml` document as
+their source.
 ```xml
 <bookstore>
 
@@ -90,7 +95,8 @@ if err := doc.ReadFromFile("bookstore.xml"); err != nil {
 
 ###Example: Processing elements and attributes
 
-This example processes the bookstore XML document with some simple element tree queries:
+The next example illustrates some ways to access elements and attributes
+using simple etree queries.
 ```go
 root := doc.SelectElement("bookstore")
 fmt.Println("ROOT element:", root.Tag)
@@ -126,7 +132,9 @@ CHILD element: book
 
 ###Example: Path queries
 
-This example processes the bookstore XML document using Path queries:
+In this example, we select all book titles that fall into the category
+of 'WEB'.  The book elements are searched for recursively and may
+appear at any level of the tree.
 ```go
 for _, t := range doc.FindElements("//book[@category='WEB']/title") {
     fmt.Println("Title:", t.Text())
@@ -137,4 +145,32 @@ Output:
 ```
 Title: XQuery Kick Start
 Title: Learning XML
+```
+
+This example finds the first book element under the bookstore element
+and outputs the tag and text of all of its child elements:
+```go
+for _, e := range doc.FindElements("./bookstore/book[1]/*") {
+    fmt.Printf("%s: %s\n", e.Tag, e.Text())
+}
+```
+
+Output:
+```
+title: Everyday Italian
+author: Giada De Laurentiis
+year: 2005
+price: 30.00
+```
+
+This example finds all books with a price of 49.95 and outputs their titles.
+```go
+for _, e := range doc.FindElements("./bookstore/book[price='49.99']/title") {
+    fmt.Println(e.Text())
+}
+```
+
+Output:
+```
+XQuery Kick Start
 ```
