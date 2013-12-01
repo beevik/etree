@@ -11,7 +11,7 @@ documentation.
 ###Example: Creating an XML document
 
 The following example creates an XML document from scratch using the etree
-package and outputs its indented contents to stdout:
+package and outputs its indented contents to stdout.
 ```go
 doc := etree.NewDocument()
 doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -85,7 +85,7 @@ their source.
 
 ###Example: Reading an XML file
 
-This example loads the bookstore sample XML from a file called `bookmark.xml`:
+This example loads the bookstore sample XML from a file called `bookstore.xml`.
 ```go
 doc := etree.NewDocument()
 if err := doc.ReadFromFile("bookstore.xml"); err != nil {
@@ -95,7 +95,7 @@ if err := doc.ReadFromFile("bookstore.xml"); err != nil {
 
 ###Example: Processing elements and attributes
 
-The next example illustrates some ways to access elements and attributes
+This example illustrates some ways to access elements and attributes
 using simple etree queries.
 ```go
 root := doc.SelectElement("bookstore")
@@ -148,7 +148,7 @@ Title: Learning XML
 ```
 
 This example finds the first book element under the bookstore element
-and outputs the tag and text of all of its child elements:
+and outputs the tag and text of all of its child elements.
 ```go
 for _, e := range doc.FindElements("./bookstore/book[1]/*") {
     fmt.Printf("%s: %s\n", e.Tag, e.Text())
@@ -163,9 +163,13 @@ year: 2005
 price: 30.00
 ```
 
-This example finds all books with a price of 49.95 and outputs their titles.
+This example finds all books with a price of 49.99 and outputs their titles.
+Note that this example uses the FindElementsPath function, which takes as an
+argument a pre-compiled path object.  Use this API when you plan to query
+with the same path more than once.
 ```go
-for _, e := range doc.FindElements("./bookstore/book[price='49.99']/title") {
+path := etree.NewPath("./bookstore/book[price='49.99']/title")
+for _, e := range doc.FindElementsPath(path) {
     fmt.Println(e.Text())
 }
 ```
