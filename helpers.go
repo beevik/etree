@@ -113,14 +113,15 @@ func isWhitespace(s string) bool {
 }
 
 var crsp = "\n                                                                                "
+var crtab = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"
 
-// crSpaces returns a carriage return followed by n spaces. It's used
-// to generate XML indentations.
-func crSpaces(n int) string {
+// crIndent returns a carriage return followed by n indent characters.
+// The indent characters come from the source string.
+func crIndent(n int, source string) string {
 	switch {
 	case n < 0:
-		return crsp[:1]
-	case n+1 > len(crsp):
+		return source[:1]
+	case n+1 > len(source):
 		buf := make([]byte, n+1)
 		buf[0] = '\n'
 		for i := 1; i < n+1; i++ {
@@ -128,7 +129,7 @@ func crSpaces(n int) string {
 		}
 		return string(buf)
 	default:
-		return crsp[:n+1]
+		return source[:n+1]
 	}
 }
 

@@ -96,6 +96,14 @@ type ProcInst struct {
 	Inst   string
 }
 
+// CreateDocument creates a new XML document with root
+// as the root element.
+func CreateDocument(root *Element) *Document {
+	doc := NewDocument()
+	doc.Child = append(doc.Child, root)
+	return doc
+}
+
 // NewDocument creates an empty XML document and returns it.
 func NewDocument() *Document {
 	return &Document{Element{Child: make([]Token, 0)}}
@@ -179,10 +187,31 @@ func (d *Document) WriteToString() (s string, err error) {
 
 // Indent modifies the document's element tree by inserting
 // CharData entities containing carriage returns and indentation.
-// The amount of indenting per depth level is equal to spaces.
+// The amount of indentation per depth level is given as spaces.
 // Pass etree.NoIndent for spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
-	d.Element.indent(0, spaces)
+	var indentfunc func(depth int) string
+	switch {
+	case spaces < 0:
+		indentfunc = func(depth int) string {
+			return ""
+		}
+	default:
+		indentfunc = func(depth int) string {
+			return crIndent(depth*spaces, crsp)
+		}
+	}
+	d.Element.indent(0, indentfunc)
+}
+
+// IndentTabs modifies the document's element tree by inserting
+// CharData entities containing carriage returns and tabs for
+// indentation.  One tab is used per indentation level.
+func (d *Document) IndentTabs() {
+	indentfunc := func(depth int) string {
+		return crIndent(depth, crtab)
+	}
+	d.Element.indent(0, indentfunc)
 }
 
 // Text returns the characters immediately following the element's
@@ -209,11 +238,6 @@ func (e *Element) SetText(text string) {
 	e.Child = append(e.Child, nil)
 	copy(e.Child[1:], e.Child[0:])
 	e.Child[0] = newCharData(text, false)
-}
-
-// AddElement adds the element c as a child of element e.
-func (e *Element) AddElement(c *Element) {
-	e.addChild(c)
 }
 
 // CreateElement creates a child element of the receiving element and
@@ -359,7 +383,7 @@ func (e *Element) FindElementsPath(path Path) []*Element {
 
 // indent recursively inserts proper indentation between an
 // XML element's child tokens.
-func (e *Element) indent(depth, spaces int) {
+func (e *Element) indent(depth int, indentfunc func(depth int) string) {
 	e.stripIndent()
 	n := len(e.Child)
 	if n == 0 {
@@ -371,16 +395,16 @@ func (e *Element) indent(depth, spaces int) {
 	isCharData := false
 	for i, c := range oldChild {
 		_, isCharData = c.(*CharData)
-		if !isCharData && spaces >= 0 && !(i == 0 && depth == 0) {
-			e.addChild(newIndentCharData(depth, spaces))
+		if !isCharData && !(i == 0 && depth == 0) {
+			e.addChild(newCharData(indentfunc(depth), true))
 		}
 		e.addChild(c)
 		if ce, ok := c.(*Element); ok {
-			ce.indent(depth+1, spaces)
+			ce.indent(depth+1, indentfunc)
 		}
 	}
-	if !isCharData && spaces >= 0 {
-		e.addChild(newIndentCharData(depth-1, spaces))
+	if !isCharData {
+		e.addChild(newCharData(indentfunc(depth-1), true))
 	}
 }
 
@@ -552,12 +576,6 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
 	w.WriteByte(' ')
 	w.WriteString(p.Inst)
 	w.WriteString("?>")
-}
-
-// newIndentCharData returns the indentation CharData token for the given
-// depth level with the given number of spaces per level.
-func newIndentCharData(depth, spaces int) *CharData {
-	return newCharData(crSpaces(depth*spaces), true)
 }
 
 // An ElementIterator allows the caller to iterate through the child elements
