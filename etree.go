@@ -464,18 +464,6 @@ func (e *Element) CreateAttr(key, value string) Attr {
 	return a
 }
 
-// CreateElementIterator creates a child element iterator that iterates
-// through all child elements with the given tag.
-func (e *Element) CreateElementIterator(tag string) *ElementIterator {
-	i := &ElementIterator{
-		parent: e,
-		tag:    tag,
-		index:  -1,
-	}
-	i.Next()
-	return i
-}
-
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer) {
 	w.WriteString(a.Key)
@@ -568,34 +556,4 @@ func (p *ProcInst) writeTo(w *bufio.Writer) {
 	w.WriteByte(' ')
 	w.WriteString(p.Inst)
 	w.WriteString("?>")
-}
-
-// An ElementIterator allows the caller to iterate through the child elements
-// of an element.
-type ElementIterator struct {
-	Element *Element
-	parent  *Element
-	tag     string
-	index   int
-}
-
-// Valid returns true if the ElementIterator currently points to a valid element.
-func (i *ElementIterator) Valid() bool {
-	return i.Element != nil
-}
-
-// Next advances to the next child element with the appropriate tag.
-func (i *ElementIterator) Next() {
-	for {
-		i.index++
-		if i.index >= len(i.parent.Child) {
-			i.Element = nil
-			return
-		}
-		c := i.parent.Child[i.index]
-		if n, ok := c.(*Element); ok && n.Tag == i.tag {
-			i.Element = n
-			return
-		}
-	}
 }
