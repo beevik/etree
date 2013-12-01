@@ -166,52 +166,44 @@ func (d *Document) WriteToFile(filename string) error {
 // bytes.
 func (d *Document) WriteToBytes() (b []byte, err error) {
 	var buf bytes.Buffer
-	_, err = d.WriteTo(&buf)
-	if err != nil {
+	if _, err = d.WriteTo(&buf); err != nil {
 		return
 	}
-	b = buf.Bytes()
-	return
+	return buf.Bytes(), nil
 }
 
 // WriteToString serializes the XML document into a string.
 func (d *Document) WriteToString() (s string, err error) {
 	var b []byte
-	b, err = d.WriteToBytes()
-	if err != nil {
+	if b, err = d.WriteToBytes(); err != nil {
 		return
 	}
-	s = string(b)
-	return
+	return string(b), nil
 }
+
+type indentFunc func(depth int) string
 
 // Indent modifies the document's element tree by inserting
 // CharData entities containing carriage returns and indentation.
 // The amount of indentation per depth level is given as spaces.
 // Pass etree.NoIndent for spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
-	var indentfunc func(depth int) string
+	var indent indentFunc
 	switch {
 	case spaces < 0:
-		indentfunc = func(depth int) string {
-			return ""
-		}
+		indent = func(depth int) string { return "" }
 	default:
-		indentfunc = func(depth int) string {
-			return crIndent(depth*spaces, crsp)
-		}
+		indent = func(depth int) string { return crIndent(depth*spaces, crsp) }
 	}
-	d.Element.indent(0, indentfunc)
+	d.Element.indent(0, indent)
 }
 
 // IndentTabs modifies the document's element tree by inserting
 // CharData entities containing carriage returns and tabs for
 // indentation.  One tab is used per indentation level.
 func (d *Document) IndentTabs() {
-	indentfunc := func(depth int) string {
-		return crIndent(depth, crtab)
-	}
-	d.Element.indent(0, indentfunc)
+	indent := func(depth int) string { return crIndent(depth, crtab) }
+	d.Element.indent(0, indent)
 }
 
 // Text returns the characters immediately following the element's
@@ -383,7 +375,7 @@ func (e *Element) FindElementsPath(path Path) []*Element {
 
 // indent recursively inserts proper indentation between an
 // XML element's child tokens.
-func (e *Element) indent(depth int, indentfunc func(depth int) string) {
+func (e *Element) indent(depth int, indent indentFunc) {
 	e.stripIndent()
 	n := len(e.Child)
 	if n == 0 {
@@ -396,15 +388,15 @@ func (e *Element) indent(depth int, indentfunc func(depth int) string) {
 	for i, c := range oldChild {
 		_, isCharData = c.(*CharData)
 		if !isCharData && !(i == 0 && depth == 0) {
-			e.addChild(newCharData(indentfunc(depth), true))
+			e.addChild(newCharData(indent(depth), true))
 		}
 		e.addChild(c)
 		if ce, ok := c.(*Element); ok {
-			ce.indent(depth+1, indentfunc)
+			ce.indent(depth+1, indent)
 		}
 	}
 	if !isCharData {
-		e.addChild(newCharData(indentfunc(depth-1), true))
+		e.addChild(newCharData(indent(depth-1), true))
 	}
 }
 
