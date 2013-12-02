@@ -1,3 +1,7 @@
+// Copyright 2013 Brett Vickers. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package etree_test
 
 import (
@@ -5,8 +9,9 @@ import (
 	"os"
 )
 
-// Create an etree Document, add XML entities to it, and serialize it to stdout.
-func Example() {
+// Create an etree Document, add XML entities to it, and serialize it
+// to stdout.
+func ExampleDocument_creating() {
 	doc := etree.NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
@@ -30,4 +35,30 @@ func Example() {
 	//   <Person name="Jon"/>
 	//   <Person name="Sally"/>
 	// </People>
+}
+
+func ExampleDocument_reading() {
+	doc := etree.NewDocument()
+	if err := doc.ReadFromFile("document.xml"); err != nil {
+		panic(err)
+	}
+}
+
+func ExamplePath() {
+	xml := `<bookstore><book><title>Great Expectations</title>
+      <author>Charles Dickens</author></book><book><title>Ulysses</title>
+      <author>James Joyce</author></book></bookstore>`
+
+	doc := etree.NewDocument()
+	doc.ReadFromString(xml)
+	for _, e := range doc.FindElements(".//book[author='Charles Dickens']") {
+		book := etree.CreateDocument(e)
+		book.Indent(2)
+		book.WriteTo(os.Stdout)
+	}
+	// Output:
+	// <book>
+	//   <title>Great Expectations</title>
+	//   <author>Charles Dickens</author>
+	// </book>
 }

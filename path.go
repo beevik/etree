@@ -1,29 +1,6 @@
-/*
- * Copyright 2013 Brett Vickers. All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- *
- *    1. Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *
- *    2. Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in the
- *       documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY COPYRIGHT HOLDER ``AS IS'' AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
- * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL COPYRIGHT HOLDER OR
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
- * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+// Copyright 2013 Brett Vickers. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 
 package etree
 
@@ -38,7 +15,36 @@ var (
 )
 
 // A Path is an object that represents an optimized version of an
-// XPath-like string.
+// XPath-like string.  Although the path strings are XPath-like,
+// only the following limited syntax is supported:
+//
+//     .               Selects the current element
+//     ..              Selects the parent of the current element
+//     *               Selects all child elements
+//     //              Selects all descendants of the current element
+//     tag             Selects all child elements with the given tag
+//     [#]             Selects the element with the given index (1-based)
+//     [@attrib]       Selects all elements with the given attribute
+//     [@attrib='val'] Selects all elements with the given attribute set to val
+//     [tag]           Selects all elements with a child element named tag
+//     [tag='val']     Selects all elements with a cihld element named tag and text equal to val
+//
+// Examples:
+//
+// Select the title elements of all book elements with a category attribute
+// of WEB:
+//     //book[@category='WEB']/title
+//
+// Select the first book element with a title child containing the text
+// 'Great Expectations':
+//     .//book[title='Great Expectations'][1]
+//
+// Select all grandchildren with an attribute 'language' equal to 'english'
+// and a parent element tag of 'book':
+//     book/*[@language='english']
+//
+// Select all book elements whose title child has a language of 'french':
+//     //book/title[@language='french']/..
 type Path struct {
 	segments []segment
 }
