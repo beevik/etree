@@ -49,11 +49,25 @@ type Path struct {
 	segments []segment
 }
 
-// NewPath creates an optimized version of an XPath-like string that
-// can be used to query elements in an element tree.  Panics if an
-// invalid path string is supplied.
-func NewPath(path string) Path {
-	return Path{parsePath(path)}
+// CompilePath creates an optimized version of an XPath-like string that
+// can be used to query elements in an element tree.
+func CompilePath(path string) (Path, error) {
+	segments, err := parsePath(path)
+	if err != nil {
+		return Path{nil}, err
+	}
+	return Path{segments}, nil
+}
+
+// MustCompilePath creates an optimized version of an XPath-like string that
+// can be used to query elements in an element tree.  Panics if an error
+// occurs.
+func MustCompilePath(path string) Path {
+	segments, err := parsePath(path)
+	if err != nil {
+		panic(err)
+	}
+	return Path{segments}
 }
 
 // A segment is a portion of a path between "/" characters.
@@ -168,7 +182,7 @@ func (p *pather) eval(n node) {
 // parsePath parses an XPath-like string describing a path
 // through an element tree and returns a slice of segment
 // descriptors.
-func parsePath(path string) []segment {
+func parsePath(path string) ([]segment, error) {
 	// If path starts or ends with //, fix it
 	if strings.HasPrefix(path, "//") {
 		path = "." + path
@@ -179,7 +193,7 @@ func parsePath(path string) []segment {
 
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
-		panic(errPath)
+		return nil, errPath
 	}
 
 	// Split path into segment objects
@@ -187,7 +201,7 @@ func parsePath(path string) []segment {
 	for _, s := range strings.Split(path, "/") {
 		segments = append(segments, parseSegment(s))
 	}
-	return segments
+	return segments, nil
 }
 
 // parseSegment parses a path segment between / characters.

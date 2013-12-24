@@ -168,7 +168,7 @@ Note that this example uses the FindElementsPath function, which takes as an
 argument a pre-compiled path object.  Use this API when you plan to query
 with the same path more than once.
 ```go
-path := etree.NewPath("./bookstore/book[price='49.99']/title")
+path := etree.MustCompilePath("./bookstore/book[price='49.99']/title")
 for _, e := range doc.FindElementsPath(path) {
     fmt.Println(e.Text())
 }
