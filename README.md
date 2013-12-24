@@ -8,6 +8,10 @@ module.
 See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
 documentation.
 
+Note that this package supports only a simplified version of XML. For instance, it
+does not support the use of XML namespaces.  Nor does it fully support the XPath
+standard.
+
 ###Example: Creating an XML document
 
 The following example creates an XML document from scratch using the etree
