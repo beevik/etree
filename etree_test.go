@@ -120,6 +120,16 @@ func TestPath(t *testing.T) {
 		}
 	}
 
+	elements = doc.FindElements("./bookstore/book[3]")
+	if len(elements) != 1 || elements[0].Tag != "book" {
+		t.Fail()
+	} else {
+		attr := elements[0].SelectAttr("category")
+		if attr == nil || attr.Key != "category" || attr.Value != "WEB" {
+			t.Fail()
+		}
+	}
+
 	if compareElements(doc.FindElements("//book//"), doc.FindElements("//book//*")) {
 		t.Fail()
 	}

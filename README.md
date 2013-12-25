@@ -8,9 +8,8 @@ module.
 See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
 documentation.
 
-Note that this package supports only a simplified version of XML. For instance, it
-does not support the use of XML namespaces.  Nor does it fully support the XPath
-standard.
+Note that this package supports only a simplified version of the XPath standard. See
+comments on the Path struct for more details.
 
 ###Example: Creating an XML document
 
@@ -50,20 +49,20 @@ Output:
 All remaining examples will use the following `bookstore.xml` document as
 their source.
 ```xml
-<bookstore>
+<bookstore xmlns:p="urn:schemas-books-com:prices">
 
   <book category="COOKING">
     <title lang="en">Everyday Italian</title>
     <author>Giada De Laurentiis</author>
     <year>2005</year>
-    <price>30.00</price>
+    <p:price>30.00</p:price>
   </book>
 
   <book category="CHILDREN">
     <title lang="en">Harry Potter</title>
     <author>J K. Rowling</author>
     <year>2005</year>
-    <price>29.99</price>
+    <p:price>29.99</p:price>
   </book>
 
   <book category="WEB">
@@ -74,14 +73,14 @@ their source.
     <author>James Linn</author>
     <author>Vaidyanathan Nagarajan</author>
     <year>2003</year>
-    <price>49.99</price>
+    <p:price>49.99</p:price>
   </book>
 
   <book category="WEB">
     <title lang="en">Learning XML</title>
     <author>Erik T. Ray</author>
     <year>2003</year>
-    <price>39.95</price>
+    <p:price>39.95</p:price>
   </book>
 
 </bookstore>
@@ -172,7 +171,7 @@ Note that this example uses the FindElementsPath function, which takes as an
 argument a pre-compiled path object.  Use this API when you plan to query
 with the same path more than once.
 ```go
-path := etree.MustCompilePath("./bookstore/book[price='49.99']/title")
+path := etree.MustCompilePath("./bookstore/book[p:price='49.99']/title")
 for _, e := range doc.FindElementsPath(path) {
     fmt.Println(e.Text())
 }

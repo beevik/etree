@@ -39,6 +39,7 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
+	Space  string   // The element tag's namespace
 	Tag    string   // The element tag
 	Attr   []Attr   // The element's key-value attribute pairs
 	Child  []Token  // The element's child tokens (elements, comments, etc.)
@@ -47,8 +48,9 @@ type Element struct {
 
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
-	Key   string
-	Value string
+	Space string // The attribute key's namespace
+	Key   string // The attribute key
+	Value string // The attribute value string
 }
 
 // A Comment represents an XML comment.
@@ -210,10 +212,17 @@ func (e *Element) SetText(text string) {
 }
 
 // CreateElement creates a child element of the receiving element and
-// gives it the specified name.
+// gives it the specified tag (within the default namespace).
 func (e *Element) CreateElement(tag string) *Element {
+	return e.CreateElementFull("", tag)
+}
+
+// CreateElementFull creates a child element of the receiving element and
+// gives it the specified namespace and tag.
+func (e *Element) CreateElementFull(space, tag string) *Element {
 	c := &Element{
 		Tag:    tag,
+		Space:  space,
 		Attr:   make([]Attr, 0),
 		Child:  make([]Token, 0),
 		Parent: e,
@@ -243,9 +252,9 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 
 		switch t := t.(type) {
 		case xml.StartElement:
-			e := top.CreateElement(t.Name.Local)
+			e := top.CreateElementFull(t.Name.Space, t.Name.Local)
 			for _, a := range t.Attr {
-				e.CreateAttr(a.Name.Local, a.Value)
+				e.CreateAttrFull(a.Name.Space, a.Name.Local, a.Value)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -266,8 +275,19 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 // SelectAttr finds an element attribute matching the requested key
 // and returns it if found.
 func (e *Element) SelectAttr(key string) *Attr {
-	for i := range e.Attr {
-		if e.Attr[i].Key == key {
+	for i, a := range e.Attr {
+		if a.Key == key {
+			return &e.Attr[i]
+		}
+	}
+	return nil
+}
+
+// SelectAttrFull finds an element attribute matching the requested
+// namespace and key and returns it if found.
+func (e *Element) SelectAttrFull(space, key string) *Attr {
+	for i, a := range e.Attr {
+		if a.Space == space && a.Key == key {
 			return &e.Attr[i]
 		}
 	}
@@ -280,6 +300,18 @@ func (e *Element) SelectAttr(key string) *Attr {
 func (e *Element) SelectAttrValue(key, dflt string) string {
 	for _, a := range e.Attr {
 		if a.Key == key {
+			return a.Value
+		}
+	}
+	return dflt
+}
+
+// SelectAttrValueFull finds an element attribute matching the requested
+// namespace and key and returns its value if found.  If it is not found,
+// the dflt value is returned instead.
+func (e *Element) SelectAttrValueFull(space, key, dflt string) string {
+	for _, a := range e.Attr {
+		if a.Space == space && a.Key == key {
 			return a.Value
 		}
 	}
@@ -308,11 +340,34 @@ func (e *Element) SelectElement(tag string) *Element {
 	return nil
 }
 
+// SelectElementFull returns the first child element with the given
+// namespace and tag.
+func (e *Element) SelectElementFull(space, tag string) *Element {
+	for _, t := range e.Child {
+		if c, ok := t.(*Element); ok && c.Space == space && c.Tag == tag {
+			return c
+		}
+	}
+	return nil
+}
+
 // SelectElements returns a slice of all child elements with the given tag.
 func (e *Element) SelectElements(tag string) []*Element {
 	elements := make([]*Element, 0)
 	for _, t := range e.Child {
 		if c, ok := t.(*Element); ok && c.Tag == tag {
+			elements = append(elements, c)
+		}
+	}
+	return elements
+}
+
+// SelectElementsFull returns a slice of all child elements with the given
+// namespace and tag.
+func (e *Element) SelectElementsFull(space, tag string) []*Element {
+	elements := make([]*Element, 0)
+	for _, t := range e.Child {
+		if c, ok := t.(*Element); ok && c.Space == space && c.Tag == tag {
 			elements = append(elements, c)
 		}
 	}
@@ -406,9 +461,17 @@ func (e *Element) stripIndent() {
 // writeTo serializes the element to the writer w.
 func (e *Element) writeTo(w *bufio.Writer) {
 	w.WriteByte('<')
+	if e.Space != "" {
+		w.WriteString(e.Space)
+		w.WriteByte(':')
+	}
 	w.WriteString(e.Tag)
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
+		if a.Space != "" {
+			w.WriteString(a.Space)
+			w.WriteByte(':')
+		}
 		a.writeTo(w)
 	}
 	if len(e.Child) > 0 {
@@ -417,6 +480,10 @@ func (e *Element) writeTo(w *bufio.Writer) {
 			c.writeTo(w)
 		}
 		w.Write([]byte{'<', '/'})
+		if e.Space != "" {
+			w.WriteString(e.Space)
+			w.WriteByte(':')
+		}
 		w.WriteString(e.Tag)
 		w.WriteByte('>')
 	} else {
@@ -431,14 +498,21 @@ func (e *Element) addChild(t Token) {
 
 // CreateAttr creates an attribute and adds it to the receiving element.
 // If an attribute with the key already exists, its value is replaced.
-func (e *Element) CreateAttr(key, value string) Attr {
-	if a := e.SelectAttr(key); a != nil {
+func (e *Element) CreateAttr(key, value string) *Attr {
+	return e.CreateAttrFull("", key, value)
+}
+
+// CreateAttrFull creates an attribute and adds it to the receiving element.
+// If an attribute with the namespace and key already exists, its value is
+// replaced.
+func (e *Element) CreateAttrFull(space, key, value string) *Attr {
+	if a := e.SelectAttrFull(space, key); a != nil {
 		a.Value = value
-		return *a
+		return a
 	}
-	a := Attr{key, value}
+	a := Attr{space, key, value}
 	e.Attr = append(e.Attr, a)
-	return a
+	return &e.Attr[len(e.Attr)-1]
 }
 
 // writeTo serializes the attribute to the writer.

@@ -61,7 +61,8 @@ func CompilePath(path string) (Path, error) {
 
 // MustCompilePath creates an optimized version of an XPath-like string that
 // can be used to query elements in an element tree.  Panics if an error
-// occurs.
+// occurs.  Use this function to create Paths when you know the path is
+// valid (i.e., if it's hard-coded).
 func MustCompilePath(path string) Path {
 	segments, err := parsePath(path)
 	if err != nil {
@@ -233,7 +234,7 @@ func parseSelector(path string) selector {
 	case "":
 		return new(selectDescendants)
 	default:
-		return &selectChildrenTag{path}
+		return newSelectChildrenTag(path)
 	}
 }
 
@@ -252,24 +253,24 @@ func parseFilter(path string) filter {
 		}
 		switch {
 		case path[0] == '@':
-			return &filterAttrVal{path[1:eqindex], path[eqindex+2 : rindex]}
+			return newFilterAttrVal(path[1:eqindex], path[eqindex+2:rindex])
 		default:
-			return &filterChildText{path[:eqindex], path[eqindex+2 : rindex]}
+			return newFilterChildText(path[:eqindex], path[eqindex+2:rindex])
 		}
 	}
 
 	// Filter contains [@attr], [N] or [tag]
 	switch {
 	case path[0] == '@':
-		return &filterAttr{path[1:]}
+		return newFilterAttr(path[1:])
 	case isInteger(path):
 		pos, _ := strconv.Atoi(path)
 		if pos == 0 {
 			pos = 1 // force to 1-based
 		}
-		return &filterPos{pos - 1}
+		return newFilterPos(pos - 1)
 	default:
-		return &filterChild{path}
+		return newFilterChild(path)
 	}
 }
 
@@ -318,15 +319,29 @@ func (s *selectDescendants) apply(e *Element, p *pather) {
 	}
 }
 
+// Break a string at ':' and return the two parts.
+func decompose(str string) (space, key string) {
+	colon := strings.IndexByte(str, ':')
+	if colon == -1 {
+		return "", str
+	}
+	return str[:colon], str[colon+1:]
+}
+
 // selectChildrenTag selects into the candidate list all child
 // elements of the element having the specified tag.
 type selectChildrenTag struct {
-	tag string
+	space, tag string
+}
+
+func newSelectChildrenTag(path string) *selectChildrenTag {
+	s, l := decompose(path)
+	return &selectChildrenTag{s, l}
 }
 
 func (s *selectChildrenTag) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && c.Tag == s.tag {
+		if c, ok := c.(*Element); ok && c.Space == s.space && c.Tag == s.tag {
 			p.candidates = append(p.candidates, c)
 		}
 	}
@@ -336,6 +351,10 @@ func (s *selectChildrenTag) apply(e *Element, p *pather) {
 // candidate at the specified index.
 type filterPos struct {
 	index int
+}
+
+func newFilterPos(pos int) *filterPos {
+	return &filterPos{pos}
 }
 
 func (f *filterPos) apply(p *pather) {
@@ -349,13 +368,18 @@ func (f *filterPos) apply(p *pather) {
 // filterAttr filters the candidate list for elements having
 // the specified attribute.
 type filterAttr struct {
-	attr string
+	space, key string
+}
+
+func newFilterAttr(str string) *filterAttr {
+	s, l := decompose(str)
+	return &filterAttr{s, l}
 }
 
 func (f *filterAttr) apply(p *pather) {
 	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
-		if a := c.SelectAttr(f.attr); a != nil {
+		if a := c.SelectAttrFull(f.space, f.key); a != nil {
 			p.scratch = append(p.scratch, c)
 		}
 	}
@@ -365,13 +389,18 @@ func (f *filterAttr) apply(p *pather) {
 // filterAttrVal filters the candidate list for elements having
 // the specified attribute with the specified value.
 type filterAttrVal struct {
-	attr, val string
+	space, key, val string
+}
+
+func newFilterAttrVal(str, value string) *filterAttrVal {
+	s, l := decompose(str)
+	return &filterAttrVal{s, l, value}
 }
 
 func (f *filterAttrVal) apply(p *pather) {
 	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
-		if a := c.SelectAttr(f.attr); a != nil && a.Value == f.val {
+		if a := c.SelectAttrFull(f.space, f.key); a != nil && a.Value == f.val {
 			p.scratch = append(p.scratch, c)
 		}
 	}
@@ -381,14 +410,21 @@ func (f *filterAttrVal) apply(p *pather) {
 // filterChild filters the candidate list for elements having
 // a child element with the specified tag.
 type filterChild struct {
-	tag string
+	space, tag string
+}
+
+func newFilterChild(str string) *filterChild {
+	s, l := decompose(str)
+	return &filterChild{s, l}
 }
 
 func (f *filterChild) apply(p *pather) {
 	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
-			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag {
+			if cc, ok := cc.(*Element); ok &&
+				cc.Space == f.space &&
+				cc.Tag == f.tag {
 				p.scratch = append(p.scratch, c)
 			}
 		}
@@ -399,14 +435,22 @@ func (f *filterChild) apply(p *pather) {
 // filterChildText filters the candidate list for elements having
 // a child element with the specified tag and text.
 type filterChildText struct {
-	tag, text string
+	space, tag, text string
+}
+
+func newFilterChildText(str, text string) *filterChildText {
+	s, l := decompose(str)
+	return &filterChildText{s, l, text}
 }
 
 func (f *filterChildText) apply(p *pather) {
 	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
-			if cc, ok := cc.(*Element); ok && cc.Tag == f.tag && cc.Text() == f.text {
+			if cc, ok := cc.(*Element); ok &&
+				cc.Space == f.space &&
+				cc.Tag == f.tag &&
+				cc.Text() == f.text {
 				p.scratch = append(p.scratch, c)
 			}
 		}
