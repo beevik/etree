@@ -39,18 +39,16 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
-	Space  string   // The element tag's namespace
-	Tag    string   // The element tag
-	Attr   []Attr   // The element's key-value attribute pairs
-	Child  []Token  // The element's child tokens (elements, comments, etc.)
-	Parent *Element // The element's parent element
+	Space, Tag string   // The element's namespace and tag
+	Attr       []Attr   // The element's key-value attribute pairs
+	Child      []Token  // The element's child tokens (elements, comments, etc.)
+	Parent     *Element // The element's parent element
 }
 
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
-	Space string // The attribute key's namespace
-	Key   string // The attribute key
-	Value string // The attribute value string
+	Space, Key string // The attribute's namespace and key
+	Value      string // The attribute value string
 }
 
 // A Comment represents an XML comment.
@@ -221,8 +219,8 @@ func (e *Element) CreateElement(tag string) *Element {
 // gives it the specified namespace and tag.
 func (e *Element) CreateElementFull(space, tag string) *Element {
 	c := &Element{
-		Tag:    tag,
 		Space:  space,
+		Tag:    tag,
 		Attr:   make([]Attr, 0),
 		Child:  make([]Token, 0),
 		Parent: e,
@@ -468,10 +466,6 @@ func (e *Element) writeTo(w *bufio.Writer) {
 	w.WriteString(e.Tag)
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
-		if a.Space != "" {
-			w.WriteString(a.Space)
-			w.WriteByte(':')
-		}
 		a.writeTo(w)
 	}
 	if len(e.Child) > 0 {
@@ -517,6 +511,10 @@ func (e *Element) CreateAttrFull(space, key, value string) *Attr {
 
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer) {
+	if a.Space != "" {
+		w.WriteString(a.Space)
+		w.WriteByte(':')
+	}
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
 	w.WriteString(a.Value)
