@@ -1,15 +1,23 @@
 etree
 =====
 
-The etree package is a go package that processes XML in the form of an element tree.
+The etree package is a lightweight, pure go package that expresses XML in
+the form of an element tree.
 Its design was inspired by the Python [ElementTree](http://docs.python.org/2/library/xml.etree.elementtree.html)
 module.
 
+Some of the etree package's features include:
+
+* Implemented in pure go; depends only on standard go libraries.
+* Built on top of the go [encoding/xml](http://golang.org/pkg/encoding/xml) package.
+* Represents XML documents as trees of elements for easy traversal by go code.
+* Imports, serializes, modifies or creates XML documents from scratch.
+* Writes and reads XML to/from files, byte slices, strings and io.Writer/io.Reader.
+* Performs simple or complex searches using lightweight XPath-like query APIs.
+* Auto-indents XML using spaces or tabs for better readability.
+
 See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
 documentation.
-
-Note that this package supports only a simplified version of the XPath standard. See
-comments on the Path struct for more details.
 
 ###Example: Creating an XML document
 
@@ -88,7 +96,7 @@ their source.
 
 ###Example: Reading an XML file
 
-This example loads the bookstore sample XML from a file called `bookstore.xml`.
+This example loads XML from a file called `bookstore.xml`.
 ```go
 doc := etree.NewDocument()
 if err := doc.ReadFromFile("bookstore.xml"); err != nil {
@@ -106,8 +114,7 @@ fmt.Println("ROOT element:", root.Tag)
 
 for _, book := range root.SelectElements("book") {
     fmt.Println("CHILD element:", book.Tag)
-    title := book.SelectElement("title")
-    if title != nil {
+    if title := book.SelectElement("title"); title != nil {
         lang := title.SelectAttrValue("lang", "unknown")
         fmt.Printf("  TITLE: %s (%s)\n", title.Text(), lang)
     }
@@ -168,8 +175,8 @@ price: 30.00
 
 This example finds all books with a price of 49.99 and outputs their titles.
 Note that this example uses the FindElementsPath function, which takes as an
-argument a pre-compiled path object.  Use this API when you plan to query
-with the same path more than once.
+argument a pre-compiled path object.  Use this API when you plan to search
+using the same path more than once.
 ```go
 path := etree.MustCompilePath("./bookstore/book[p:price='49.99']/title")
 for _, e := range doc.FindElementsPath(path) {
