@@ -232,9 +232,10 @@ func (e *Element) CreateElementFull(space, tag string) *Element {
 // ReadFrom reads XML from the reader r and stores the result as
 // a new child of the receiving element.
 func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
-	stack := elementStack{e}
 	r := newCountReader(ri)
 	dec := xml.NewDecoder(r)
+	var stack stack
+	stack.push(e)
 	for {
 		t, err := dec.RawToken()
 		switch {
@@ -242,11 +243,11 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 			return r.bytes, nil
 		case err != nil:
 			return r.bytes, err
-		case len(stack) == 0:
+		case stack.empty():
 			return r.bytes, ErrInvalidFormat
 		}
 
-		top := stack.peek()
+		top := stack.peek().(*Element)
 
 		switch t := t.(type) {
 		case xml.StartElement:

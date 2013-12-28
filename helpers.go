@@ -9,26 +9,74 @@ import (
 	"strings"
 )
 
-// An element stack is a simple stack of elements.
-type elementStack []*Element
-
-func (s *elementStack) empty() bool {
-	return len(*s) == 0
+// A simple stack
+type stack struct {
+	data []interface{}
 }
 
-func (s *elementStack) push(e *Element) {
-	*s = append(*s, e)
+func (s *stack) empty() bool {
+	return len(s.data) == 0
 }
 
-func (s *elementStack) pop() *Element {
-	e := (*s)[len(*s)-1]
-	(*s)[len(*s)-1] = nil
-	*s = (*s)[:len(*s)-1]
-	return e
+func (s *stack) push(value interface{}) {
+	s.data = append(s.data, value)
 }
 
-func (s *elementStack) peek() *Element {
-	return (*s)[len(*s)-1]
+func (s *stack) pop() interface{} {
+	value := s.data[len(s.data)-1]
+	s.data[len(s.data)-1] = nil
+	s.data = s.data[:len(s.data)-1]
+	return value
+}
+
+func (s *stack) peek() interface{} {
+	return s.data[len(s.data)-1]
+}
+
+// A fifo is a simple first-in-first-out queue.
+type fifo struct {
+	data       []interface{}
+	head, tail int
+}
+
+func (f *fifo) add(value interface{}) {
+	if f.len()+1 >= len(f.data) {
+		f.grow()
+	}
+	f.data[f.tail] = value
+	f.tail = (f.tail + 1) % len(f.data)
+}
+
+func (f *fifo) remove() interface{} {
+	value := f.data[f.head]
+	f.data[f.head] = nil
+	f.head = (f.head + 1) % len(f.data)
+	return value
+}
+
+func (f *fifo) len() int {
+	if f.tail >= f.head {
+		return f.tail - f.head
+	} else {
+		return len(f.data) - f.head + f.tail
+	}
+}
+
+func (f *fifo) grow() {
+	c := len(f.data) * 2
+	if c == 0 {
+		c = 4
+	}
+	buf, count := make([]interface{}, c), f.len()
+	if f.tail >= f.head {
+		copy(buf[0:count], f.data[f.head:f.tail])
+		f.head, f.tail = 0, count
+	} else {
+		hindex := len(f.data) - f.head
+		copy(buf[0:hindex], f.data[f.head:])
+		copy(buf[hindex:count], f.data[:f.tail])
+	}
+	f.data, f.head, f.tail = buf, 0, count
 }
 
 // countReader implements a proxy reader that counts the number of

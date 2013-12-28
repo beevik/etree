@@ -101,8 +101,7 @@ type filter interface {
 // a Path object.  It collects and deduplicates elements matching
 // the path query.
 type pather struct {
-	queue      []node
-	qindex     int
+	queue      fifo
 	results    []*Element
 	inResults  map[*Element]bool
 	candidates []*Element
@@ -118,7 +117,6 @@ type node struct {
 
 func newPather() *pather {
 	return &pather{
-		queue:      make([]node, 0),
 		results:    make([]*Element, 0),
 		inResults:  make(map[*Element]bool),
 		candidates: make([]*Element, 0),
@@ -126,35 +124,12 @@ func newPather() *pather {
 	}
 }
 
-func (p *pather) add(n node) {
-	p.queue = append(p.queue, n)
-}
-
-func (p *pather) remove() node {
-	n := p.queue[p.qindex]
-	p.qindex++
-	if p.qindex > len(p.queue)/2 && p.qindex > 32 {
-		p.rebalance()
-	}
-	return n
-}
-
-func (p *pather) rebalance() {
-	count := len(p.queue) - p.qindex
-	copy(p.queue[:count], p.queue[p.qindex:])
-	p.queue, p.qindex = p.queue[:count], 0
-}
-
-func (p *pather) empty() bool {
-	return len(p.queue) == p.qindex
-}
-
 // traverse follows the path from the element e, collecting
 // and then returning all elements that match the path's selectors
 // and filters.
 func (p *pather) traverse(e *Element, path Path) []*Element {
-	for p.add(node{e, path.segments}); !p.empty(); {
-		p.eval(p.remove())
+	for p.queue.add(node{e, path.segments}); p.queue.len() > 0; {
+		p.eval(p.queue.remove().(node))
 	}
 	return p.results
 }
@@ -175,7 +150,7 @@ func (p *pather) eval(n node) {
 		}
 	} else {
 		for _, c := range p.candidates {
-			p.add(node{c, remain})
+			p.queue.add(node{c, remain})
 		}
 	}
 }
@@ -307,13 +282,13 @@ func (s *selectChildren) apply(e *Element, p *pather) {
 type selectDescendants struct{}
 
 func (s *selectDescendants) apply(e *Element, p *pather) {
-	stack := elementStack{e}
-	for !stack.empty() {
-		e := stack.pop()
+	queue := fifo{}
+	for queue.add(e); queue.len() > 0; {
+		e := queue.remove().(*Element)
 		p.candidates = append(p.candidates, e)
 		for _, c := range e.Child {
 			if c, ok := c.(*Element); ok {
-				stack.push(c)
+				queue.add(c)
 			}
 		}
 	}

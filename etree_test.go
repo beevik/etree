@@ -10,7 +10,7 @@ import (
 
 var testXml string = `
 <?xml version="1.0" encoding="UTF-8"?>
-<bookstore>
+<bookstore xmlns:p="books-com:prices">
 
   <!Directive>
 
@@ -18,14 +18,14 @@ var testXml string = `
     <title lang="en">Everyday Italian</title>
     <author>Giada De Laurentiis</author>
     <year>2005</year>
-    <price>30.00</price>
+    <p:price>30.00</p:price>
   </book>
 
   <book category="CHILDREN">
     <title lang="en">Harry Potter</title>
     <author>J K. Rowling</author>
     <year>2005</year>
-    <price>29.99</price>
+    <p:price>29.99</p:price>
   </book>
 
   <book category="WEB">
@@ -36,7 +36,7 @@ var testXml string = `
     <author>James Linn</author>
     <author>Vaidyanathan Nagarajan</author>
     <year>2003</year>
-    <price>49.99</price>
+    <p:price>49.99</p:price>
   </book>
 
   <!-- Final book -->
@@ -44,7 +44,7 @@ var testXml string = `
     <title lang="en">Learning XML</title>
     <author>Erik T. Ray</author>
     <year>2003</year>
-    <price>39.95</price>
+    <p:price>39.95</p:price>
   </book>
 
 </bookstore>
@@ -96,101 +96,4 @@ func compareElements(a []*Element, b []*Element) bool {
 		}
 	}
 	return false
-}
-
-func TestPath(t *testing.T) {
-	doc := NewDocument()
-
-	if err := doc.ReadFromString(testXml); err != nil {
-		t.Fail()
-	}
-
-	elements := doc.FindElements("*")
-	if len(elements) != 1 || elements[0].Tag != "bookstore" {
-		t.Fail()
-	}
-
-	elements = doc.FindElements("//book")
-	if len(elements) != 4 {
-		t.Fail()
-	}
-	for _, e := range elements {
-		if e.Tag != "book" || len(e.Attr) != 1 || e.SelectAttrValue("category", "") == "" {
-			t.Fail()
-		}
-	}
-
-	elements = doc.FindElements("./bookstore/book[3]")
-	if len(elements) != 1 || elements[0].Tag != "book" {
-		t.Fail()
-	} else {
-		attr := elements[0].SelectAttr("category")
-		if attr == nil || attr.Key != "category" || attr.Value != "WEB" {
-			t.Fail()
-		}
-	}
-
-	if compareElements(doc.FindElements("//book//"), doc.FindElements("//book//*")) {
-		t.Fail()
-	}
-	if compareElements(doc.FindElements(".//book"), doc.FindElements("//book")) {
-		t.Fail()
-	}
-
-	elements = doc.FindElements("./bookstore/book[2]")
-	if len(elements) != 1 || elements[0].Tag != "book" {
-		t.Fail()
-	}
-
-	elements = doc.FindElements(".//book[@category='WEB']")
-	if len(elements) != 2 {
-		t.Fail()
-	}
-	for _, e := range elements {
-		if e.Tag != "book" || e.SelectAttrValue("category", "") != "WEB" {
-			t.Fail()
-		}
-		if e.SelectAttrValue("missing", "xyz") != "xyz" {
-			t.Fail()
-		}
-	}
-
-	elements = doc.FindElements("./bookstore/book/title/..")
-	if len(elements) != 4 {
-		t.Fail()
-	}
-	for _, e := range elements {
-		if e.Tag != "book" {
-			t.Fail()
-		}
-	}
-
-	element := doc.FindElement("./bookstore/book[4]/title")
-	if element.Text() != "Learning XML" {
-		t.Fail()
-	}
-
-	if doc.FindElement("./bookstore/book[0]") != doc.FindElement("./bookstore/book[1]") {
-		t.Fail()
-	}
-
-}
-
-func TestPath2(t *testing.T) {
-	doc := NewDocument()
-
-	if err := doc.ReadFromString(testXml); err != nil {
-		t.Fail()
-	}
-
-	defer func() {
-		if e := recover(); e != nil {
-			if e != errPath {
-				t.Fail()
-			}
-		}
-	}()
-
-	doc.FindElement("/bookstore")
-	t.Fail()
 }

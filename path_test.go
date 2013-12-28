@@ -1,0 +1,97 @@
+// Copyright 2013 Brett Vickers. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package etree
+
+import (
+	"testing"
+)
+
+type test struct {
+	path   string
+	result interface{}
+}
+
+var tests = []test{
+
+	// basic queries
+	{"./bookstore/book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{"./bookstore/book/author", []string{"Giada De Laurentiis", "J K. Rowling", "James McGovern", "Per Bothner", "Kurt Cagle", "James Linn", "Vaidyanathan Nagarajan", "Erik T. Ray"}},
+	{"./bookstore/book/year", []string{"2005", "2005", "2003", "2003"}},
+	{"./bookstore/book/p:price", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{"./bookstore/book/isbn", nil},
+
+	// descendant queries
+	{"//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{"//book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{".//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{".//bookstore//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{".//book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{".//p:price/.", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{".//price", nil},
+
+	// positional queries
+	{"./bookstore/book[1]/title", "Everyday Italian"},
+	{"./bookstore/book[3]/author[0]", "James McGovern"},
+	{"./bookstore/book[3]/author[1]", "James McGovern"},
+	{"./bookstore/book[3]/author[3]/./.", "Kurt Cagle"},
+	{"./bookstore/book[3]/author[6]", nil},
+
+	// text queries
+	{"./bookstore/book[author='James McGovern']/title", "XQuery Kick Start"},
+	{"./bookstore/book[author='Per Bothner']/title", "XQuery Kick Start"},
+	{"./bookstore/book[author='Kurt Cagle']/title", "XQuery Kick Start"},
+	{"./bookstore/book[author='James Linn']/title", "XQuery Kick Start"},
+	{"./bookstore/book[author='Vaidyanathan Nagarajan']/title", "XQuery Kick Start"},
+	{"//book[p:price='29.99']/title", "Harry Potter"},
+
+	// attribute queries
+	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
+	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
+	{"./bookstore/book/title[@lang='fr']", nil},
+
+	// parent queries
+	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
+}
+
+func TestPath(t *testing.T) {
+	doc := NewDocument()
+	err := doc.ReadFromString(testXml)
+	if err != nil {
+		t.Error(err)
+	}
+	for _, tt := range tests {
+		path, err := CompilePath(tt.path)
+		if err != nil {
+			fail(t, tt)
+		} else {
+			elements := doc.FindElementsPath(path)
+			switch s := tt.result.(type) {
+			case nil:
+				if len(elements) != 0 {
+					fail(t, tt)
+				}
+			case string:
+				if len(elements) != 1 || elements[0].Text() != s {
+					fail(t, tt)
+				}
+			case []string:
+				if len(elements) != len(s) {
+					fail(t, tt)
+					return
+				}
+				for i := 0; i < len(elements); i++ {
+					if elements[i].Text() != s[i] {
+						fail(t, tt)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+func fail(t *testing.T, tt test) {
+	t.Errorf("Failing test case: %s\n", tt.path)
+}
