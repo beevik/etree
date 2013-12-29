@@ -14,37 +14,42 @@ var (
 	errPath = errors.New("etree: invalid path")
 )
 
-// A Path is an object that represents an optimized version of an
-// XPath-like string.  Although the path strings are XPath-like,
-// only the following limited syntax is supported:
-//
-//     .               Selects the current element
-//     ..              Selects the parent of the current element
-//     *               Selects all child elements
-//     //              Selects all descendants of the current element
-//     tag             Selects all child elements with the given tag
-//     [#]             Selects the element with the given index (1-based)
-//     [@attrib]       Selects all elements with the given attribute
-//     [@attrib='val'] Selects all elements with the given attribute set to val
-//     [tag]           Selects all elements with a child element named tag
-//     [tag='val']     Selects all elements with a cihld element named tag and text equal to val
-//
-// Examples:
-//
-// Select the title elements of all book elements with a category attribute
-// of WEB:
-//     //book[@category='WEB']/title
-//
-// Select the first book element with a title child containing the text
-// 'Great Expectations':
-//     .//book[title='Great Expectations'][1]
-//
-// Select all grandchildren with an attribute 'language' equal to 'english'
-// and a parent element tag of 'book':
-//     book/*[@language='english']
-//
-// Select all book elements whose title child has a language of 'french':
-//     //book/title[@language='french']/..
+/*
+A Path is an object that represents an optimized version of an
+XPath-like search string.  Although path strings are XPath-like,
+only the following limited syntax is supported:
+
+    .               Selects the current element
+    ..              Selects the parent of the current element
+    *               Selects all child elements
+    //              Selects all descendants of the current element
+    tag             Selects all child elements with the given tag
+    [#]             Selects the element with the given index (1-based,
+                      negative starts from end)
+    [@attrib]       Selects all elements with the given attribute
+    [@attrib='val'] Selects all elements with the given attribute set to val
+    [tag]           Selects all elements with a child element named tag
+    [tag='val']     Selects all elements with a cihld element named tag
+                      and text equal to val
+
+Examples:
+
+Select the title elements of all descendant book elements having a
+'category' attribute of 'WEB':
+    //book[@category='WEB']/title
+
+Select the first book element with a title child containing the text
+'Great Expectations':
+    .//book[title='Great Expectations'][1]
+
+Starting from the current element, select all children of book elements
+with an attribute 'language' set to 'english':
+    ./book/*[@language='english']
+
+Select all descendant book elements whose title element has an attribute
+'language' set to 'french':
+    //book/title[@language='french']/..
+*/
 type Path struct {
 	segments []segment
 }
@@ -52,9 +57,10 @@ type Path struct {
 // CompilePath creates an optimized version of an XPath-like string that
 // can be used to query elements in an element tree.
 func CompilePath(path string) (Path, error) {
-	segments, err := parsePath(path)
-	if err != nil {
-		return Path{nil}, err
+	var comp compiler
+	segments := comp.parsePath(path)
+	if comp.err != nil {
+		return Path{nil}, comp.err
 	}
 	return Path{segments}, nil
 }
@@ -64,11 +70,11 @@ func CompilePath(path string) (Path, error) {
 // occurs.  Use this function to create Paths when you know the path is
 // valid (i.e., if it's hard-coded).
 func MustCompilePath(path string) Path {
-	segments, err := parsePath(path)
+	p, err := CompilePath(path)
 	if err != nil {
 		panic(err)
 	}
-	return Path{segments}
+	return p
 }
 
 // A segment is a portion of a path between "/" characters.
@@ -97,8 +103,8 @@ type filter interface {
 	apply(p *pather)
 }
 
-// A pather is helper object used to traverse an element tree with
-// a Path object.  It collects and deduplicates elements matching
+// A pather is helper object that traverses an element tree using
+// a Path object.  It collects and deduplicates all elements matching
 // the path query.
 type pather struct {
 	queue      fifo
@@ -155,10 +161,15 @@ func (p *pather) eval(n node) {
 	}
 }
 
+// A compiler generates a compiled path from a path string.
+type compiler struct {
+	err error
+}
+
 // parsePath parses an XPath-like string describing a path
 // through an element tree and returns a slice of segment
 // descriptors.
-func parsePath(path string) ([]segment, error) {
+func (c *compiler) parsePath(path string) []segment {
 	// If path starts or ends with //, fix it
 	if strings.HasPrefix(path, "//") {
 		path = "." + path
@@ -169,36 +180,41 @@ func parsePath(path string) ([]segment, error) {
 
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
-		return nil, errPath
+		c.err = errPath
+		return nil
 	}
 
 	// Split path into segment objects
 	segments := make([]segment, 0)
 	for _, s := range strings.Split(path, "/") {
-		segments = append(segments, parseSegment(s))
+		segments = append(segments, c.parseSegment(s))
+		if c.err != nil {
+			break
+		}
 	}
-	return segments, nil
+	return segments
 }
 
 // parseSegment parses a path segment between / characters.
-func parseSegment(path string) segment {
+func (c *compiler) parseSegment(path string) segment {
 	pieces := strings.Split(path, "[")
 	seg := segment{
-		sel:     parseSelector(pieces[0]),
+		sel:     c.parseSelector(pieces[0]),
 		filters: make([]filter, 0),
 	}
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
 		if fpath[len(fpath)-1] != ']' {
-			panic(errPath)
+			c.err = errPath
+			break
 		}
-		seg.filters = append(seg.filters, parseFilter(fpath[:len(fpath)-1]))
+		seg.filters = append(seg.filters, c.parseFilter(fpath[:len(fpath)-1]))
 	}
 	return seg
 }
 
 // parseSelector parses a selector at the start of a path segment.
-func parseSelector(path string) selector {
+func (c *compiler) parseSelector(path string) selector {
 	switch path {
 	case ".":
 		return new(selectSelf)
@@ -209,14 +225,15 @@ func parseSelector(path string) selector {
 	case "":
 		return new(selectDescendants)
 	default:
-		return newSelectChildrenTag(path)
+		return newSelectChildrenByTag(path)
 	}
 }
 
 // parseFilter parses a path filter contained within [brackets].
-func parseFilter(path string) filter {
+func (c *compiler) parseFilter(path string) filter {
 	if len(path) == 0 {
-		panic(errPath)
+		c.err = errPath
+		return nil
 	}
 
 	// Filter contains [@attr='val'] or [tag='val']?
@@ -224,7 +241,8 @@ func parseFilter(path string) filter {
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
 		if rindex != len(path)-1 {
-			panic(errPath)
+			c.err = errPath
+			return nil
 		}
 		switch {
 		case path[0] == '@':
@@ -240,10 +258,12 @@ func parseFilter(path string) filter {
 		return newFilterAttr(path[1:])
 	case isInteger(path):
 		pos, _ := strconv.Atoi(path)
-		if pos == 0 {
-			pos = 1 // force to 1-based
+		switch {
+		case pos > 0:
+			return newFilterPos(pos - 1)
+		default:
+			return newFilterPos(pos)
 		}
-		return newFilterPos(pos - 1)
 	default:
 		return newFilterChild(path)
 	}
@@ -282,7 +302,7 @@ func (s *selectChildren) apply(e *Element, p *pather) {
 type selectDescendants struct{}
 
 func (s *selectDescendants) apply(e *Element, p *pather) {
-	queue := fifo{}
+	var queue fifo
 	for queue.add(e); queue.len() > 0; {
 		e := queue.remove().(*Element)
 		p.candidates = append(p.candidates, e)
@@ -303,18 +323,18 @@ func decompose(str string) (space, key string) {
 	return str[:colon], str[colon+1:]
 }
 
-// selectChildrenTag selects into the candidate list all child
+// selectChildrenByTag selects into the candidate list all child
 // elements of the element having the specified tag.
-type selectChildrenTag struct {
+type selectChildrenByTag struct {
 	space, tag string
 }
 
-func newSelectChildrenTag(path string) *selectChildrenTag {
+func newSelectChildrenByTag(path string) *selectChildrenByTag {
 	s, l := decompose(path)
-	return &selectChildrenTag{s, l}
+	return &selectChildrenByTag{s, l}
 }
 
-func (s *selectChildrenTag) apply(e *Element, p *pather) {
+func (s *selectChildrenByTag) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
 		if c, ok := c.(*Element); ok && c.Space == s.space && c.Tag == s.tag {
 			p.candidates = append(p.candidates, c)
@@ -334,8 +354,14 @@ func newFilterPos(pos int) *filterPos {
 
 func (f *filterPos) apply(p *pather) {
 	p.scratch = p.scratch[:0]
-	if f.index < len(p.candidates) {
-		p.scratch = append(p.scratch, p.candidates[f.index])
+	if f.index >= 0 {
+		if f.index < len(p.candidates) {
+			p.scratch = append(p.scratch, p.candidates[f.index])
+		}
+	} else {
+		if -f.index <= len(p.candidates) {
+			p.scratch = append(p.scratch, p.candidates[len(p.candidates)+f.index])
+		}
 	}
 	p.candidates = p.scratch
 }

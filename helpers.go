@@ -70,7 +70,6 @@ func (f *fifo) grow() {
 	buf, count := make([]interface{}, c), f.len()
 	if f.tail >= f.head {
 		copy(buf[0:count], f.data[f.head:f.tail])
-		f.head, f.tail = 0, count
 	} else {
 		hindex := len(f.data) - f.head
 		copy(buf[0:hindex], f.data[f.head:])

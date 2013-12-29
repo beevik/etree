@@ -33,10 +33,15 @@ var tests = []test{
 
 	// positional queries
 	{"./bookstore/book[1]/title", "Everyday Italian"},
+	{"./bookstore/book[4]/title", "Learning XML"},
+	{"./bookstore/book[5]/title", nil},
 	{"./bookstore/book[3]/author[0]", "James McGovern"},
 	{"./bookstore/book[3]/author[1]", "James McGovern"},
 	{"./bookstore/book[3]/author[3]/./.", "Kurt Cagle"},
 	{"./bookstore/book[3]/author[6]", nil},
+	{"./bookstore/book[-1]/title", "Learning XML"},
+	{"./bookstore/book[-4]/title", "Everyday Italian"},
+	{"./bookstore/book[-5]/title", nil},
 
 	// text queries
 	{"./bookstore/book[author='James McGovern']/title", "XQuery Kick Start"},
@@ -55,7 +60,7 @@ var tests = []test{
 	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
 }
 
-func TestPath(t *testing.T) {
+func TestGoodPaths(t *testing.T) {
 	doc := NewDocument()
 	err := doc.ReadFromString(testXml)
 	if err != nil {
@@ -94,4 +99,21 @@ func TestPath(t *testing.T) {
 
 func fail(t *testing.T, tt test) {
 	t.Errorf("Failing test case: %s\n", tt.path)
+}
+
+var badPaths = []string{
+	"/bookstore",
+	"./bookstore/book[]",
+	"./bookstore/book[@category='WEB'",
+	"./bookstore/book[@category='WEB]",
+	"./bookstore/book[author]a",
+}
+
+func TestBadPaths(t *testing.T) {
+	for _, s := range badPaths {
+		_, err := CompilePath(s)
+		if err == nil {
+			t.Errorf("Bad path failed to cause error: %s\n", s)
+		}
+	}
 }
