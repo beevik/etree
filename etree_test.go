@@ -22,7 +22,7 @@ var testXml string = `
   </book>
 
   <book category="CHILDREN">
-    <title lang="en">Harry Potter</title>
+    <title lang="en" sku="150">Harry Potter</title>
     <author>J K. Rowling</author>
     <year>2005</year>
     <p:price>29.99</p:price>

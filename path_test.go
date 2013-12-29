@@ -50,10 +50,12 @@ var tests = []test{
 	{"./bookstore/book[author='James Linn']/title", "XQuery Kick Start"},
 	{"./bookstore/book[author='Vaidyanathan Nagarajan']/title", "XQuery Kick Start"},
 	{"//book[p:price='29.99']/title", "Harry Potter"},
+	{"//book[price='29.99']/title", nil},
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
 	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
+	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
 	{"./bookstore/book/title[@lang='fr']", nil},
 
 	// parent queries
@@ -70,35 +72,45 @@ func TestGoodPaths(t *testing.T) {
 		path, err := CompilePath(tt.path)
 		if err != nil {
 			fail(t, tt)
-		} else {
-			elements := doc.FindElementsPath(path)
-			switch s := tt.result.(type) {
-			case nil:
-				if len(elements) != 0 {
+			return
+		}
+
+		elements := doc.FindElementsPath(path)
+		switch s := tt.result.(type) {
+		case nil:
+			if len(elements) != 0 {
+				fail(t, tt)
+			}
+		case string:
+			if len(elements) != 1 || elements[0].Text() != s {
+				fail(t, tt)
+			}
+			element := doc.FindElementPath(path)
+			if element == nil || element.Text() != s {
+				fail(t, tt)
+			}
+		case []string:
+			if len(elements) != len(s) {
+				fail(t, tt)
+				return
+			}
+			for i := 0; i < len(elements); i++ {
+				if elements[i].Text() != s[i] {
 					fail(t, tt)
-				}
-			case string:
-				if len(elements) != 1 || elements[0].Text() != s {
-					fail(t, tt)
-				}
-			case []string:
-				if len(elements) != len(s) {
-					fail(t, tt)
-					return
-				}
-				for i := 0; i < len(elements); i++ {
-					if elements[i].Text() != s[i] {
-						fail(t, tt)
-						break
-					}
+					break
 				}
 			}
+			element := doc.FindElementPath(path)
+			if element == nil || element.Text() != s[0] {
+				fail(t, tt)
+			}
 		}
+
 	}
 }
 
 func fail(t *testing.T, tt test) {
-	t.Errorf("Failing test case: %s\n", tt.path)
+	t.Errorf("etree: failed test '%s'\n", tt.path)
 }
 
 var badPaths = []string{
@@ -113,7 +125,7 @@ func TestBadPaths(t *testing.T) {
 	for _, s := range badPaths {
 		_, err := CompilePath(s)
 		if err == nil {
-			t.Errorf("Bad path failed to cause error: %s\n", s)
+			t.Errorf("etree: bad path '%s' failed to cause error\n", s)
 		}
 	}
 }
