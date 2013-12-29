@@ -136,24 +136,22 @@ func isWhitespace(s string) bool {
 	return true
 }
 
-var crsp = "\n                                                                                "
-var crtab = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"
+// Strings used by crIndent
+const (
+	crsp  = "\n                                                                "
+	crtab = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"
+)
 
-// crIndent returns a carriage return followed by n indent characters.
-// The indent characters come from the source string.
+// crIndent returns a carriage return followed by n copies of the
+// first non-CR character in the source string.
 func crIndent(n int, source string) string {
 	switch {
 	case n < 0:
 		return source[:1]
-	case n+1 > len(source):
-		buf := make([]byte, n+1)
-		buf[0] = '\n'
-		for i := 1; i < n+1; i++ {
-			buf[i] = ' '
-		}
-		return string(buf)
-	default:
+	case n < len(source):
 		return source[:n+1]
+	default:
+		return source + strings.Repeat(source[1:2], n-len(source)+1)
 	}
 }
 
