@@ -5,13 +5,8 @@
 package etree
 
 import (
-	"errors"
 	"strconv"
 	"strings"
-)
-
-var (
-	errPath = errors.New("etree: invalid path")
 )
 
 /*
@@ -24,12 +19,12 @@ only the following limited syntax is supported:
     *               Selects all child elements
     //              Selects all descendants of the current element
     tag             Selects all child elements with the given tag
-    [#]             Selects the element with the given index (1-based,
-                      negative starts from end)
+    [#]             Selects the element of the given index (1-based,
+                      negative starts from the end)
     [@attrib]       Selects all elements with the given attribute
     [@attrib='val'] Selects all elements with the given attribute set to val
     [tag]           Selects all elements with a child element named tag
-    [tag='val']     Selects all elements with a cihld element named tag
+    [tag='val']     Selects all elements with a child element named tag
                       and text equal to val
 
 Examples:
@@ -180,7 +175,7 @@ func (c *compiler) parsePath(path string) []segment {
 
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
-		c.err = errPath
+		c.err = ErrPath
 		return nil
 	}
 
@@ -205,7 +200,7 @@ func (c *compiler) parseSegment(path string) segment {
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
 		if fpath[len(fpath)-1] != ']' {
-			c.err = errPath
+			c.err = ErrPath
 			break
 		}
 		seg.filters = append(seg.filters, c.parseFilter(fpath[:len(fpath)-1]))
@@ -232,7 +227,7 @@ func (c *compiler) parseSelector(path string) selector {
 // parseFilter parses a path filter contained within [brackets].
 func (c *compiler) parseFilter(path string) filter {
 	if len(path) == 0 {
-		c.err = errPath
+		c.err = ErrPath
 		return nil
 	}
 
@@ -241,7 +236,7 @@ func (c *compiler) parseFilter(path string) filter {
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
 		if rindex != len(path)-1 {
-			c.err = errPath
+			c.err = ErrPath
 			return nil
 		}
 		switch {
@@ -353,7 +348,6 @@ func newFilterPos(pos int) *filterPos {
 }
 
 func (f *filterPos) apply(p *pather) {
-	p.scratch = p.scratch[:0]
 	if f.index >= 0 {
 		if f.index < len(p.candidates) {
 			p.scratch = append(p.scratch, p.candidates[f.index])
@@ -363,7 +357,7 @@ func (f *filterPos) apply(p *pather) {
 			p.scratch = append(p.scratch, p.candidates[len(p.candidates)+f.index])
 		}
 	}
-	p.candidates = p.scratch
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
 // filterAttr filters the candidate list for elements having
@@ -378,13 +372,12 @@ func newFilterAttr(str string) *filterAttr {
 }
 
 func (f *filterAttr) apply(p *pather) {
-	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		if a := c.SelectAttrFull(f.space, f.key); a != nil {
 			p.scratch = append(p.scratch, c)
 		}
 	}
-	p.candidates = p.scratch
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
 // filterAttrVal filters the candidate list for elements having
@@ -399,13 +392,12 @@ func newFilterAttrVal(str, value string) *filterAttrVal {
 }
 
 func (f *filterAttrVal) apply(p *pather) {
-	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		if a := c.SelectAttrFull(f.space, f.key); a != nil && a.Value == f.val {
 			p.scratch = append(p.scratch, c)
 		}
 	}
-	p.candidates = p.scratch
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
 // filterChild filters the candidate list for elements having
@@ -420,7 +412,6 @@ func newFilterChild(str string) *filterChild {
 }
 
 func (f *filterChild) apply(p *pather) {
-	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
@@ -430,7 +421,7 @@ func (f *filterChild) apply(p *pather) {
 			}
 		}
 	}
-	p.candidates = p.scratch
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
 // filterChildText filters the candidate list for elements having
@@ -445,7 +436,6 @@ func newFilterChildText(str, text string) *filterChildText {
 }
 
 func (f *filterChildText) apply(p *pather) {
-	p.scratch = p.scratch[:0]
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
@@ -456,5 +446,5 @@ func (f *filterChildText) apply(p *pather) {
 			}
 		}
 	}
-	p.candidates = p.scratch
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }

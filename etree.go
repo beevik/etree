@@ -21,7 +21,8 @@ const (
 )
 
 var (
-	ErrInvalidFormat = errors.New("etree: invalid XML format")
+	ErrXml  = errors.New("etree: invalid XML format")
+	ErrPath = errors.New("etree: invalid path")
 )
 
 // A Token is an empty interface that represents an Element,
@@ -244,7 +245,7 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 		case err != nil:
 			return r.bytes, err
 		case stack.empty():
-			return r.bytes, ErrInvalidFormat
+			return r.bytes, ErrXml
 		}
 
 		top := stack.peek().(*Element)
