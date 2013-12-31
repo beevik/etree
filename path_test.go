@@ -13,6 +13,8 @@ type test struct {
 	result interface{}
 }
 
+type errorResult string
+
 var tests = []test{
 
 	// basic queries
@@ -60,72 +62,65 @@ var tests = []test{
 
 	// parent queries
 	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
+
+	// bad paths
+	{"/bookstore", errorResult("etree: invalid path")},
+	{"./bookstore/book[]", errorResult("etree: invalid path")},
+	{"./bookstore/book[@category='WEB'", errorResult("etree: invalid path")},
+	{"./bookstore/book[@category='WEB]", errorResult("etree: invalid path")},
+	{"./bookstore/book[author]a", errorResult("etree: invalid path")},
 }
 
-func TestGoodPaths(t *testing.T) {
+func TestPath(t *testing.T) {
 	doc := NewDocument()
 	err := doc.ReadFromString(testXml)
 	if err != nil {
 		t.Error(err)
 	}
-	for _, tt := range tests {
-		path, err := CompilePath(tt.path)
+
+	for _, test := range tests {
+		t.Logf("Path: %s\n", test.path)
+
+		path, err := CompilePath(test.path)
 		if err != nil {
-			fail(t, tt)
-			return
+			if r, ok := test.result.(errorResult); !ok || err.Error() != string(r) {
+				fail(t, test)
+			}
+			continue
 		}
 
+		// Test both FindElementsPath and FindElementPath
+		element := doc.FindElementPath(path)
 		elements := doc.FindElementsPath(path)
-		switch s := tt.result.(type) {
+
+		switch s := test.result.(type) {
+		case errorResult:
+			fail(t, test)
 		case nil:
-			if len(elements) != 0 {
-				fail(t, tt)
+			if element != nil || len(elements) != 0 {
+				fail(t, test)
 			}
 		case string:
-			if len(elements) != 1 || elements[0].Text() != s {
-				fail(t, tt)
-			}
-			element := doc.FindElementPath(path)
-			if element == nil || element.Text() != s {
-				fail(t, tt)
+			if element == nil || element.Text() != s ||
+				len(elements) != 1 || elements[0].Text() != s {
+				fail(t, test)
 			}
 		case []string:
-			if len(elements) != len(s) {
-				fail(t, tt)
-				return
+			if element == nil || element.Text() != s[0] || len(elements) != len(s) {
+				fail(t, test)
+				continue
 			}
 			for i := 0; i < len(elements); i++ {
 				if elements[i].Text() != s[i] {
-					fail(t, tt)
+					fail(t, test)
 					break
 				}
 			}
-			element := doc.FindElementPath(path)
-			if element == nil || element.Text() != s[0] {
-				fail(t, tt)
-			}
 		}
 
 	}
 }
 
-func fail(t *testing.T, tt test) {
-	t.Errorf("etree: failed test '%s'\n", tt.path)
-}
-
-var badPaths = []string{
-	"/bookstore",
-	"./bookstore/book[]",
-	"./bookstore/book[@category='WEB'",
-	"./bookstore/book[@category='WEB]",
-	"./bookstore/book[author]a",
-}
-
-func TestBadPaths(t *testing.T) {
-	for _, s := range badPaths {
-		_, err := CompilePath(s)
-		if err == nil {
-			t.Errorf("etree: bad path '%s' failed to cause error\n", s)
-		}
-	}
+func fail(t *testing.T, test test) {
+	t.Errorf("etree: failed test '%s'\n", test.path)
 }
