@@ -8,82 +8,108 @@ import (
 	"testing"
 )
 
-var testXml string = `
-<?xml version="1.0" encoding="UTF-8"?>
-<bookstore xmlns:p="books-com:prices">
+func TestDocument(t *testing.T) {
 
-  <!Directive>
-
-  <book category="COOKING">
-    <title lang="en">Everyday Italian</title>
-    <author>Giada De Laurentiis</author>
-    <year>2005</year>
-    <p:price>30.00</p:price>
-  </book>
-
-  <book category="CHILDREN">
-    <title lang="en" sku="150">Harry Potter</title>
-    <author>J K. Rowling</author>
-    <year>2005</year>
-    <p:price>29.99</p:price>
-  </book>
-
-  <book category="WEB">
-    <title lang="en">XQuery Kick Start</title>
-    <author>James McGovern</author>
-    <author>Per Bothner</author>
-    <author>Kurt Cagle</author>
-    <author>James Linn</author>
-    <author>Vaidyanathan Nagarajan</author>
-    <year>2003</year>
-    <p:price>49.99</p:price>
-  </book>
-
-  <!-- Final book -->
-  <book category="WEB">
-    <title lang="en">Learning XML</title>
-    <author>Erik T. Ray</author>
-    <year>2003</year>
-    <p:price>39.95</p:price>
-  </book>
-
-</bookstore>
-`
-
-func TestCreateDocument(t *testing.T) {
+	// Create a document
 	doc := NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
-	root := doc.CreateElement("bookstore")
-	root.CreateDirective("Directive")
-	root.CreateComment("This is a comment")
-	book := root.CreateElement("book")
-	book.CreateAttr("lang", "fr")
+	store := doc.CreateElement("store")
+	store.CreateAttrFull("xmlns", "t", "urn:books-com:titles")
+	store.CreateDirective("Directive")
+	store.CreateComment("This is a comment")
+	book := store.CreateElement("book")
+	book.CreateAttrFull("", "lang", "fr")
 	book.CreateAttr("lang", "en")
-	title := book.CreateElement("title")
+	title := book.CreateElementFull("t", "title")
 	title.SetText("Nicholas Nickleby")
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
-	author.SetText("Charles Dickens")
-	doc.Indent(4)
+	author.CreateCharData("Charles Dickens")
+	doc.IndentTabs()
+
+	// Serialize the document to a string
 	s, err := doc.WriteToString()
 	if err != nil {
 		t.Fail()
 	}
+
+	// Make sure the serialized XML matches expectation.
 	expected := `<?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="style.xsl"?>
-<bookstore>
-    <!Directive>
-    <!--This is a comment-->
-    <book lang="en">
-        <title>Great Expectations</title>
-        <author>Charles Dickens</author>
-    </book>
-</bookstore>
+<store xmlns:t="urn:books-com:titles">
+	<!Directive>
+	<!--This is a comment-->
+	<book lang="en">
+		<t:title>Great Expectations</t:title>
+		<author>Charles Dickens</author>
+	</book>
+</store>
 `
 	if expected != s {
+		t.Error("etree: serialized XML doesn't match expectation.")
+	}
+
+	// Test the structure of the XML
+	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Fail()
 	}
+	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
+		t.Fail()
+	}
+	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
+		t.Fail()
+	}
+	if len(author.ChildElements()) != 0 || len(author.Child) != 1 || len(author.Attr) != 0 {
+		t.Fail()
+	}
+	if book.Parent != store || store.Parent != &doc.Element || doc.Parent != nil {
+		t.Fail()
+	}
+	if title.Parent != book || author.Parent != book {
+		t.Fail()
+	}
+
+	// Perform some basic queries on the document
+	elements := doc.SelectElementsFull("", "store")
+	if len(elements) != 1 || elements[0] != store {
+		t.Fail()
+	}
+	element := doc.SelectElementFull("", "store")
+	if element != store {
+		t.Fail()
+	}
+	elements = store.SelectElementsFull("", "book")
+	if len(elements) != 1 || elements[0] != book {
+		t.Fail()
+	}
+	element = store.SelectElementFull("", "book")
+	if element != book {
+		t.Fail()
+	}
+	attr := book.SelectAttrFull("", "lang")
+	if attr == nil || attr.Key != "lang" || attr.Value != "en" {
+		t.Fail()
+	}
+	if book.SelectAttrValueFull("", "lang", "unknown") != "en" {
+		t.Fail()
+	}
+	if book.SelectAttrValueFull("t", "missing", "unknown") != "unknown" {
+		t.Fail()
+	}
+	element = book.SelectElementFull("t", "title")
+	if element != title || element.Text() != "Great Expectations" || len(element.Attr) != 0 {
+		t.Fail()
+	}
+	element = book.SelectElement("title")
+	if element != title {
+		t.Fail()
+	}
+	element = book.SelectElementFull("", "title")
+	if element != nil {
+		t.Fail()
+	}
+
 }
 
 func compareElements(a []*Element, b []*Element) bool {

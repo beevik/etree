@@ -8,6 +8,48 @@ import (
 	"testing"
 )
 
+var testXml string = `
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore xmlns:p="urn:books-com:prices">
+
+	<!Directive>
+
+	<book category="COOKING">
+		<title lang="en">Everyday Italian</title>
+		<author>Giada De Laurentiis</author>
+		<year>2005</year>
+		<p:price>30.00</p:price>
+	</book>
+
+	<book category="CHILDREN">
+		<title lang="en" sku="150">Harry Potter</title>
+		<author>J K. Rowling</author>
+		<year>2005</year>
+		<p:price>29.99</p:price>
+	</book>
+
+	<book category="WEB">
+		<title lang="en">XQuery Kick Start</title>
+		<author>James McGovern</author>
+		<author>Per Bothner</author>
+		<author>Kurt Cagle</author>
+		<author>James Linn</author>
+		<author>Vaidyanathan Nagarajan</author>
+		<year>2003</year>
+		<p:price>49.99</p:price>
+	</book>
+
+	<!-- Final book -->
+	<book category="WEB">
+		<title lang="en">Learning XML</title>
+		<author>Erik T. Ray</author>
+		<year>2003</year>
+		<p:price>39.95</p:price>
+	</book>
+
+</bookstore>
+`
+
 type test struct {
 	path   string
 	result interface{}
