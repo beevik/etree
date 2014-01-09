@@ -230,6 +230,18 @@ func (e *Element) CreateElementFull(space, tag string) *Element {
 	return c
 }
 
+// RemoveElement removes the given child element. If an identical child element
+// does not exist, nil is returned.
+func (e *Element) RemoveElement(el *Element) *Element {
+	for i, t := range e.Child {
+		if c, ok := t.(*Element); ok && c == el {
+			e.Child = append(e.Child[0:i], e.Child[i+1:]...)
+			return c
+		}
+	}
+	return nil
+}
+
 // ReadFrom reads XML from the reader r and stores the result as
 // a new child of the receiving element.
 func (e *Element) readFrom(ri io.Reader) (n int64, err error) {

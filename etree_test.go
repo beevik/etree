@@ -109,7 +109,14 @@ func TestDocument(t *testing.T) {
 	if element != nil {
 		t.Fail()
 	}
-
+	element = book.RemoveElement(title)
+	if element != title {
+		t.Fail()
+	}
+	element = book.SelectElement("title")
+	if element != nil {
+		t.Fail()
+	}
 }
 
 func compareElements(a []*Element, b []*Element) bool {
