@@ -523,6 +523,18 @@ func (e *Element) CreateAttrFull(space, key, value string) *Attr {
 	return &e.Attr[len(e.Attr)-1]
 }
 
+// RemoveElement removes the given attribute. If an equal attribute does not
+// exist, nil is returned.
+func (e *Element) RemoveAttr(attr *Attr) *Attr {
+	for i, a := range e.Attr {
+		if a == *attr {
+			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
+			return attr
+		}
+	}
+	return nil
+}
+
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer) {
 	if a.Space != "" {
