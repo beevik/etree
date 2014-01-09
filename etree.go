@@ -93,6 +93,17 @@ func (doc *Document) Copy() *Document {
 	return &Document{*(doc.dup(nil).(*Element))}
 }
 
+// Root returns the root element of the document, or nil if there is no root
+// element.
+func (d *Document) Root() *Element {
+	for _, t := range d.Child {
+		if c, ok := t.(*Element); ok {
+			return c
+		}
+	}
+	return nil
+}
+
 // ReadFrom reads XML from the reader r into the document d.
 // It returns the number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {

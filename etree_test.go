@@ -51,6 +51,9 @@ func TestDocument(t *testing.T) {
 	}
 
 	// Test the structure of the XML
+	if doc.Root() != store {
+		t.Fail()
+	}
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Fail()
 	}
