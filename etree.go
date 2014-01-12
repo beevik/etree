@@ -28,6 +28,7 @@ var (
 // A Token is an empty interface that represents an Element,
 // Comment, CharData, or ProcInst.
 type Token interface {
+	dup(parent *Element) Token
 	writeTo(w *bufio.Writer)
 }
 
@@ -85,6 +86,11 @@ func CreateDocument(root *Element) *Document {
 // NewDocument creates an empty XML document and returns it.
 func NewDocument() *Document {
 	return &Document{Element{Child: make([]Token, 0)}}
+}
+
+// Copy returns a recursive, deep copy of the document.
+func (doc *Document) Copy() *Document {
+	return &Document{*(doc.dup(nil).(*Element))}
 }
 
 // ReadFrom reads XML from the reader r into the document d.
@@ -182,6 +188,15 @@ func (d *Document) Indent(spaces int) {
 func (d *Document) IndentTabs() {
 	indent := func(depth int) string { return crIndent(depth, crtab) }
 	d.Element.indent(0, indent)
+}
+
+// Copy creates a parentless, recursive, deep copy of the element and
+// all its attributes and children. The returned element has no
+// parent but can be parented to a document using the CreateDocument
+// function.
+func (e *Element) Copy() *Element {
+	var parent *Element
+	return e.dup(parent).(*Element)
 }
 
 // Text returns the characters immediately following the element's
@@ -470,6 +485,24 @@ func (e *Element) stripIndent() {
 	e.Child = newChild
 }
 
+// dup duplicates the element.
+func (e *Element) dup(parent *Element) Token {
+	ne := &Element{
+		Space:  e.Space,
+		Tag:    e.Tag,
+		Attr:   make([]Attr, len(e.Attr)),
+		Child:  make([]Token, len(e.Child)),
+		Parent: parent,
+	}
+	for i, t := range e.Child {
+		ne.Child[i] = t.dup(ne)
+	}
+	for i, a := range e.Attr {
+		ne.Attr[i] = a
+	}
+	return ne
+}
+
 // writeTo serializes the element to the writer w.
 func (e *Element) writeTo(w *bufio.Writer) {
 	w.WriteByte('<')
@@ -594,6 +627,11 @@ func (e *Element) createCharData(data string, whitespace bool) *CharData {
 	return c
 }
 
+// dup duplicates the character data.
+func (c *CharData) dup(parent *Element) Token {
+	return newCharData(c.Data, c.whitespace)
+}
+
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer) {
 	w.WriteString(escape(c.Data))
@@ -610,6 +648,11 @@ func (e *Element) CreateComment(comment string) *Comment {
 	c := newComment(comment)
 	e.addChild(c)
 	return c
+}
+
+// dup duplicates the comment.
+func (c *Comment) dup(parent *Element) Token {
+	return newComment(c.Data)
 }
 
 // writeTo serialies the comment to the writer.
@@ -632,6 +675,11 @@ func (e *Element) CreateDirective(data string) *Directive {
 	return d
 }
 
+// dup duplicates the directive.
+func (d *Directive) dup(parent *Element) Token {
+	return newDirective(d.Data)
+}
+
 // writeTo serializes the XML directive to the writer.
 func (d *Directive) writeTo(w *bufio.Writer) {
 	w.WriteString("<!")
@@ -650,6 +698,11 @@ func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 	p := newProcInst(target, inst)
 	e.addChild(p)
 	return p
+}
+
+// dup duplicates the procinst.
+func (p *ProcInst) dup(parent *Element) Token {
+	return newProcInst(p.Target, p.Inst)
 }
 
 // writeTo serializes the processing instruction to the writer.

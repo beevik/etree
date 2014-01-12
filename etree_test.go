@@ -137,6 +137,52 @@ func TestDocument(t *testing.T) {
 	}
 }
 
+func TestCopy(t *testing.T) {
+	s := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	doc1 := NewDocument()
+	err := doc1.ReadFromString(s)
+	if err != nil {
+		t.Fail()
+	}
+
+	s1, err := doc1.WriteToString()
+	if err != nil {
+		t.Fail()
+	}
+
+	doc2 := doc1.Copy()
+	s2, err := doc2.WriteToString()
+	if err != nil {
+		t.Fail()
+	}
+
+	if s1 != s2 {
+		t.Error("Copied documents don't match")
+	}
+
+	e1 := doc1.FindElement("./store/book/title")
+	e2 := doc2.FindElement("./store/book/title")
+	if e1 == nil || e2 == nil {
+		t.Error("Failed to find element")
+	}
+	if e1 == e2 {
+		t.Error("Copied documents contain same element")
+	}
+
+	e1.Parent.RemoveElement(e1)
+	s1, _ = doc1.WriteToString()
+	s2, _ = doc2.WriteToString()
+	if s1 == s2 {
+		t.Error("Copied and modified documents should not match")
+	}
+}
+
 func compareElements(a []*Element, b []*Element) bool {
 	if len(a) != len(b) {
 		return true
