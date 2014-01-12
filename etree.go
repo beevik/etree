@@ -535,6 +535,34 @@ func (e *Element) RemoveAttr(attr *Attr) *Attr {
 	return nil
 }
 
+// RemoveAttrByKey removes the first attribute of the element whose key
+// matches the given key.  The attribute's value is returned.  If no
+// match is found, the empty string is returned.
+func (e *Element) RemoveAttrByKey(key string) string {
+	for i, a := range e.Attr {
+		if a.Key == key {
+			v := a.Value
+			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
+			return v
+		}
+	}
+	return ""
+}
+
+// RemoveAttrByKeyFull removes the first attribute of the element whose
+// namespace and key match the given values.  The attribute's value is
+// returned.  If no match is found, the empty string is returned.
+func (e *Element) RemoveAttrByKeyFull(space, key string) string {
+	for i, a := range e.Attr {
+		if a.Space == space && a.Key == key {
+			v := a.Value
+			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
+			return v
+		}
+	}
+	return ""
+}
+
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer) {
 	if a.Space != "" {
