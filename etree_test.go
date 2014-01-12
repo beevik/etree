@@ -106,13 +106,13 @@ func TestDocument(t *testing.T) {
 		t.Fail()
 	}
 	book.CreateAttrFull("", "lang", "fr")
-	attrval := book.RemoveAttrByKeyFull("", "lang")
-	if attrval != "fr" {
+	attr = book.RemoveAttrByKeyFull("", "lang")
+	if attr.Value != "fr" {
 		t.Fail()
 	}
 	book.CreateAttr("lang", "de")
-	attrval = book.RemoveAttrByKey("lang")
-	if attrval != "de" {
+	attr = book.RemoveAttrByKey("lang")
+	if attr.Value != "de" {
 		t.Fail()
 	}
 	element = book.SelectElementFull("t", "title")

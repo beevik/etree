@@ -251,6 +251,7 @@ func (e *Element) RemoveElement(el *Element) *Element {
 	for i, t := range e.Child {
 		if c, ok := t.(*Element); ok && c == el {
 			e.Child = append(e.Child[0:i], e.Child[i+1:]...)
+			c.Parent = nil
 			return c
 		}
 	}
@@ -556,8 +557,8 @@ func (e *Element) CreateAttrFull(space, key, value string) *Attr {
 	return &e.Attr[len(e.Attr)-1]
 }
 
-// RemoveElement removes the given attribute. If an equal attribute does not
-// exist, nil is returned.
+// RemoveElement removes and returns the given attribute. If an equal
+// attribute does not exist, nil is returned.
 func (e *Element) RemoveAttr(attr *Attr) *Attr {
 	for i, a := range e.Attr {
 		if a == *attr {
@@ -568,32 +569,30 @@ func (e *Element) RemoveAttr(attr *Attr) *Attr {
 	return nil
 }
 
-// RemoveAttrByKey removes the first attribute of the element whose key
-// matches the given key.  The attribute's value is returned.  If no
-// match is found, the empty string is returned.
-func (e *Element) RemoveAttrByKey(key string) string {
+// RemoveAttrByKey removes and returns the first attribute of the
+// element whose key matches the given key.  If an equal attribute
+// does not exist, nil is returned.
+func (e *Element) RemoveAttrByKey(key string) *Attr {
 	for i, a := range e.Attr {
 		if a.Key == key {
-			v := a.Value
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return v
+			return &a
 		}
 	}
-	return ""
+	return nil
 }
 
-// RemoveAttrByKeyFull removes the first attribute of the element whose
-// namespace and key match the given values.  The attribute's value is
-// returned.  If no match is found, the empty string is returned.
-func (e *Element) RemoveAttrByKeyFull(space, key string) string {
+// RemoveAttrByKeyFull removes and returns the first attribute of the
+// element whose namespace and key match the given values.  If an
+// equal attibute does not exist, nil is returned.
+func (e *Element) RemoveAttrByKeyFull(space, key string) *Attr {
 	for i, a := range e.Attr {
 		if a.Space == space && a.Key == key {
-			v := a.Value
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return v
+			return &a
 		}
 	}
-	return ""
+	return nil
 }
 
 // writeTo serializes the attribute to the writer.
