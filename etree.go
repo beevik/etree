@@ -568,22 +568,10 @@ func (e *Element) CreateAttrFull(space, key, value string) *Attr {
 	return &e.Attr[len(e.Attr)-1]
 }
 
-// RemoveElement removes and returns the given attribute. If an equal
-// attribute does not exist, nil is returned.
-func (e *Element) RemoveAttr(attr *Attr) *Attr {
-	for i, a := range e.Attr {
-		if a == *attr {
-			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return attr
-		}
-	}
-	return nil
-}
-
-// RemoveAttrByKey removes and returns the first attribute of the
-// element whose key matches the given key.  If an equal attribute
-// does not exist, nil is returned.
-func (e *Element) RemoveAttrByKey(key string) *Attr {
+// RemoveAttr removes and returns the first attribute of the element whose key
+// matches the given key. If an equal attribute does not exist, nil is
+// returned.
+func (e *Element) RemoveAttr(key string) *Attr {
 	for i, a := range e.Attr {
 		if a.Key == key {
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
@@ -593,10 +581,10 @@ func (e *Element) RemoveAttrByKey(key string) *Attr {
 	return nil
 }
 
-// RemoveAttrByKeyFull removes and returns the first attribute of the
-// element whose namespace and key match the given values.  If an
-// equal attibute does not exist, nil is returned.
-func (e *Element) RemoveAttrByKeyFull(space, key string) *Attr {
+// RemoveAttrFull removes and returns the first attribute of the element whose
+// namespace and key match the given values. If an equal attibute does not
+// exist, nil is returned.
+func (e *Element) RemoveAttrFull(space, key string) *Attr {
 	for i, a := range e.Attr {
 		if a.Space == space && a.Key == key {
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)

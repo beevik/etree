@@ -20,7 +20,7 @@ func TestDocument(t *testing.T) {
 	store.CreateComment("This is a comment")
 	book := store.CreateElement("book")
 	book.CreateAttrFull("", "lang", "fr")
-	lang := book.CreateAttr("lang", "en")
+	book.CreateAttr("lang", "en")
 	title := book.CreateElementFull("t", "title")
 	title.SetText("Nicholas Nickleby")
 	title.SetText("Great Expectations")
@@ -100,21 +100,12 @@ func TestDocument(t *testing.T) {
 	if book.SelectAttrValueFull("t", "missing", "unknown") != "unknown" {
 		t.Fail()
 	}
-	attr = book.RemoveAttr(lang)
-	if attr != lang {
-		t.Fail()
-	}
-	attr = book.SelectAttr("lang")
-	if attr != nil {
-		t.Fail()
-	}
-	book.CreateAttrFull("", "lang", "fr")
-	attr = book.RemoveAttrByKeyFull("", "lang")
-	if attr.Value != "fr" {
+	attr = book.RemoveAttrFull("", "lang")
+	if attr.Value != "en" {
 		t.Fail()
 	}
 	book.CreateAttr("lang", "de")
-	attr = book.RemoveAttrByKey("lang")
+	attr = book.RemoveAttr("lang")
 	if attr.Value != "de" {
 		t.Fail()
 	}
