@@ -31,7 +31,7 @@ func TestDocument(t *testing.T) {
 	// Serialize the document to a string
 	s, err := doc.WriteToString()
 	if err != nil {
-		t.Fail()
+		t.Error("etree: failed to serialize document")
 	}
 
 	// Make sure the serialized XML matches expectation.
@@ -47,87 +47,87 @@ func TestDocument(t *testing.T) {
 </store>
 `
 	if expected != s {
-		t.Error("etree: serialized XML doesn't match expectation.")
+		t.Error(testFailed)
 	}
 
 	// Test the structure of the XML
 	if doc.Root() != store {
-		t.Fail()
+		t.Error("etree: root mismatch")
 	}
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 	if len(author.ChildElements()) != 0 || len(author.Child) != 1 || len(author.Attr) != 0 {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 	if book.Parent != store || store.Parent != &doc.Element || doc.Parent != nil {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 	if title.Parent != book || author.Parent != book {
-		t.Fail()
+		t.Error("etree: incorrect tree structure")
 	}
 
 	// Perform some basic queries on the document
 	elements := doc.SelectElementsFull("", "store")
 	if len(elements) != 1 || elements[0] != store {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementsFull result")
 	}
 	element := doc.SelectElementFull("", "store")
 	if element != store {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementFull result")
 	}
 	elements = store.SelectElementsFull("", "book")
 	if len(elements) != 1 || elements[0] != book {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementsFull result")
 	}
 	element = store.SelectElementFull("", "book")
 	if element != book {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementFull result")
 	}
 	attr := book.SelectAttrFull("", "lang")
 	if attr == nil || attr.Key != "lang" || attr.Value != "en" {
-		t.Fail()
+		t.Error("etree: incorrect SelectAttrFull result")
 	}
 	if book.SelectAttrValueFull("", "lang", "unknown") != "en" {
-		t.Fail()
+		t.Error("etree: incorrect SelectAttrValueFull result")
 	}
 	if book.SelectAttrValueFull("t", "missing", "unknown") != "unknown" {
-		t.Fail()
+		t.Error("etree: incorrect SelectAttrValueFull result")
 	}
 	attr = book.RemoveAttrFull("", "lang")
 	if attr.Value != "en" {
-		t.Fail()
+		t.Error("etree: incorrect RemoveAttrFull result")
 	}
 	book.CreateAttr("lang", "de")
 	attr = book.RemoveAttr("lang")
 	if attr.Value != "de" {
-		t.Fail()
+		t.Error("etree: incorrect RemoveAttr result")
 	}
 	element = book.SelectElementFull("t", "title")
 	if element != title || element.Text() != "Great Expectations" || len(element.Attr) != 0 {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementFull result")
 	}
 	element = book.SelectElement("title")
 	if element != title {
-		t.Fail()
+		t.Error("etree: incorrect SelectElement result")
 	}
 	element = book.SelectElementFull("", "title")
 	if element != nil {
-		t.Fail()
+		t.Error("etree: incorrect SelectElementFull result")
 	}
 	element = book.RemoveElement(title)
 	if element != title {
-		t.Fail()
+		t.Error("etree: incorrect RemoveElement result")
 	}
 	element = book.SelectElement("title")
 	if element != nil {
-		t.Fail()
+		t.Error("etree: incorrect SelectElement result")
 	}
 }
 
@@ -142,49 +142,37 @@ func TestCopy(t *testing.T) {
 	doc1 := NewDocument()
 	err := doc1.ReadFromString(s)
 	if err != nil {
-		t.Fail()
+		t.Error("etree: incorrect ReadFromString result")
 	}
 
 	s1, err := doc1.WriteToString()
 	if err != nil {
-		t.Fail()
+		t.Error("etree: incorrect WriteToString result")
 	}
 
 	doc2 := doc1.Copy()
 	s2, err := doc2.WriteToString()
 	if err != nil {
-		t.Fail()
+		t.Error("etree: incorrect Copy result")
 	}
 
 	if s1 != s2 {
-		t.Error("Copied documents don't match")
+		t.Error("etree: mismatched Copy result")
 	}
 
 	e1 := doc1.FindElement("./store/book/title")
 	e2 := doc2.FindElement("./store/book/title")
 	if e1 == nil || e2 == nil {
-		t.Error("Failed to find element")
+		t.Error("etree: incorrect FindElement result")
 	}
 	if e1 == e2 {
-		t.Error("Copied documents contain same element")
+		t.Error("etree: incorrect FindElement result")
 	}
 
 	e1.Parent.RemoveElement(e1)
 	s1, _ = doc1.WriteToString()
 	s2, _ = doc2.WriteToString()
 	if s1 == s2 {
-		t.Error("Copied and modified documents should not match")
+		t.Error("etree: incorrect result after RemoveElement")
 	}
-}
-
-func compareElements(a []*Element, b []*Element) bool {
-	if len(a) != len(b) {
-		return true
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return true
-		}
-	}
-	return false
 }
