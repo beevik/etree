@@ -73,7 +73,7 @@ var tests = []test{
 	{".//bookstore//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{".//book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{".//p:price/.", []string{"30.00", "29.99", "49.99", "39.95"}},
-	{".//price", nil},
+	{".//price", []string{"30.00", "29.99", "49.99", "39.95"}},
 
 	// positional queries
 	{"./bookstore/book[1]/title", "Everyday Italian"},
@@ -94,7 +94,7 @@ var tests = []test{
 	{"./bookstore/book[author='James Linn']/title", "XQuery Kick Start"},
 	{"./bookstore/book[author='Vaidyanathan Nagarajan']/title", "XQuery Kick Start"},
 	{"//book[p:price='29.99']/title", "Harry Potter"},
-	{"//book[price='29.99']/title", nil},
+	{"//book[price='29.99']/title", "Harry Potter"},
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
@@ -121,8 +121,6 @@ func TestPath(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Logf("Path: %s\n", test.path)
-
 		path, err := CompilePath(test.path)
 		if err != nil {
 			if r, ok := test.result.(errorResult); !ok || err.Error() != string(r) {

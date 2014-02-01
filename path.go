@@ -318,6 +318,17 @@ func decompose(str string) (space, key string) {
 	return str[:colon], str[colon+1:]
 }
 
+// spaceMatch returns true if namespace a is the empty string
+// or if namespace a equals namespace b.
+func spaceMatch(a, b string) bool {
+	switch {
+	case a == "":
+		return true
+	default:
+		return a == b
+	}
+}
+
 // selectChildrenByTag selects into the candidate list all child
 // elements of the element having the specified tag.
 type selectChildrenByTag struct {
@@ -331,7 +342,7 @@ func newSelectChildrenByTag(path string) *selectChildrenByTag {
 
 func (s *selectChildrenByTag) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && c.Space == s.space && c.Tag == s.tag {
+		if c, ok := c.(*Element); ok && spaceMatch(s.space, c.Space) && s.tag == c.Tag {
 			p.candidates = append(p.candidates, c)
 		}
 	}
@@ -373,8 +384,11 @@ func newFilterAttr(str string) *filterAttr {
 
 func (f *filterAttr) apply(p *pather) {
 	for _, c := range p.candidates {
-		if a := c.SelectAttrFull(f.space, f.key); a != nil {
-			p.scratch = append(p.scratch, c)
+		for _, a := range c.Attr {
+			if spaceMatch(f.space, a.Space) && f.key == a.Key {
+				p.scratch = append(p.scratch, c)
+				break
+			}
 		}
 	}
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
@@ -393,8 +407,11 @@ func newFilterAttrVal(str, value string) *filterAttrVal {
 
 func (f *filterAttrVal) apply(p *pather) {
 	for _, c := range p.candidates {
-		if a := c.SelectAttrFull(f.space, f.key); a != nil && a.Value == f.val {
-			p.scratch = append(p.scratch, c)
+		for _, a := range c.Attr {
+			if spaceMatch(f.space, a.Space) && f.key == a.Key && f.val == a.Value {
+				p.scratch = append(p.scratch, c)
+				break
+			}
 		}
 	}
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
@@ -415,8 +432,8 @@ func (f *filterChild) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
-				cc.Space == f.space &&
-				cc.Tag == f.tag {
+				spaceMatch(f.space, cc.Space) &&
+				f.tag == cc.Tag {
 				p.scratch = append(p.scratch, c)
 			}
 		}
@@ -439,9 +456,9 @@ func (f *filterChildText) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
-				cc.Space == f.space &&
-				cc.Tag == f.tag &&
-				cc.Text() == f.text {
+				spaceMatch(f.space, cc.Space) &&
+				f.tag == cc.Tag &&
+				f.text == cc.Text() {
 				p.scratch = append(p.scratch, c)
 			}
 		}
