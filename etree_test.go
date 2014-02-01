@@ -47,7 +47,7 @@ func TestDocument(t *testing.T) {
 </store>
 `
 	if expected != s {
-		t.Error(testFailed)
+		t.Error("etree: serialization incorrect")
 	}
 
 	// Test the structure of the XML
