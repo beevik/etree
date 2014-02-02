@@ -241,21 +241,11 @@ func (e *Element) SetText(text string) {
 // by a ':'.
 func (e *Element) CreateElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
-	c := &Element{
-		Space:  space,
-		Tag:    stag,
-		Attr:   make([]Attr, 0),
-		Child:  make([]Token, 0),
-		Parent: e,
-	}
-	e.addChild(c)
-	return c
+	return e.createElement(space, stag)
 }
 
-// CreateElementFull creates a child element of the receiving element and
-// gives it the specified namespace and tag.  (DEPRECATED, use CreateElement
-// instead.)
-func (e *Element) CreateElementFull(space, tag string) *Element {
+// createElement is a helper function that creates new elements.
+func (e *Element) createElement(space, tag string) *Element {
 	c := &Element{
 		Space:  space,
 		Tag:    tag,
@@ -302,9 +292,9 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 
 		switch t := t.(type) {
 		case xml.StartElement:
-			e := top.CreateElementFull(t.Name.Space, t.Name.Local)
+			e := top.createElement(t.Name.Space, t.Name.Local)
 			for _, a := range t.Attr {
-				e.CreateAttrFull(a.Name.Space, a.Name.Local, a.Value)
+				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -335,18 +325,6 @@ func (e *Element) SelectAttr(key string) *Attr {
 	return nil
 }
 
-// SelectAttrFull finds an element attribute matching the requested
-// namespace and key and returns it if found.  (DEPRECATED, use
-// SelectAttr instead.)
-func (e *Element) SelectAttrFull(space, key string) *Attr {
-	for i, a := range e.Attr {
-		if a.Space == space && a.Key == key {
-			return &e.Attr[i]
-		}
-	}
-	return nil
-}
-
 // SelectAttrValue finds an element attribute matching the requested key
 // and returns its value if found.  The key may contain a namespace prefixed
 // by ':'.  If the key is not found, the dflt value is returned instead.
@@ -354,19 +332,6 @@ func (e *Element) SelectAttrValue(key, dflt string) string {
 	space, skey := spaceDecompose(key)
 	for _, a := range e.Attr {
 		if spaceMatch(space, a.Space) && skey == a.Key {
-			return a.Value
-		}
-	}
-	return dflt
-}
-
-// SelectAttrValueFull finds an element attribute matching the requested
-// namespace and key and returns its value if found.  If it is not found,
-// the dflt value is returned instead.  (DEPRECATED, use SelectAttrValue
-// instead.)
-func (e *Element) SelectAttrValueFull(space, key, dflt string) string {
-	for _, a := range e.Attr {
-		if a.Space == space && a.Key == key {
 			return a.Value
 		}
 	}
@@ -397,17 +362,6 @@ func (e *Element) SelectElement(tag string) *Element {
 	return nil
 }
 
-// SelectElementFull returns the first child element with the given
-// namespace and tag. (DEPRECATED, use SelectElement instead.)
-func (e *Element) SelectElementFull(space, tag string) *Element {
-	for _, t := range e.Child {
-		if c, ok := t.(*Element); ok && c.Space == space && c.Tag == tag {
-			return c
-		}
-	}
-	return nil
-}
-
 // SelectElements returns a slice of all child elements with the given tag.
 // The tag may contain a namespace, prefixed by ':'.
 func (e *Element) SelectElements(tag string) []*Element {
@@ -415,18 +369,6 @@ func (e *Element) SelectElements(tag string) []*Element {
 	elements := make([]*Element, 0)
 	for _, t := range e.Child {
 		if c, ok := t.(*Element); ok && spaceMatch(space, c.Space) && stag == c.Tag {
-			elements = append(elements, c)
-		}
-	}
-	return elements
-}
-
-// SelectElementsFull returns a slice of all child elements with the given
-// namespace and tag. (DEPRECATED, use SelectElements instead.)
-func (e *Element) SelectElementsFull(space, tag string) []*Element {
-	elements := make([]*Element, 0)
-	for _, t := range e.Child {
-		if c, ok := t.(*Element); ok && c.Space == space && c.Tag == tag {
 			elements = append(elements, c)
 		}
 	}
@@ -574,24 +516,16 @@ func (e *Element) addChild(t Token) {
 // the key already exists, its value is replaced.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
+	return e.createAttr(space, skey, value)
+}
+
+// createAttr is a helper function that creates attributes.
+func (e *Element) createAttr(space, key, value string) *Attr {
 	for i, a := range e.Attr {
-		if space == a.Space && skey == a.Key {
+		if space == a.Space && key == a.Key {
 			e.Attr[i].Value = value
 			return &e.Attr[i]
 		}
-	}
-	a := Attr{space, skey, value}
-	e.Attr = append(e.Attr, a)
-	return &e.Attr[len(e.Attr)-1]
-}
-
-// CreateAttrFull creates an attribute and adds it to the receiving element.
-// If an attribute with the namespace and key already exists, its value is
-// replaced. (DEPRECATED, use CreateAttr instead.)
-func (e *Element) CreateAttrFull(space, key, value string) *Attr {
-	if a := e.SelectAttrFull(space, key); a != nil {
-		a.Value = value
-		return a
 	}
 	a := Attr{space, key, value}
 	e.Attr = append(e.Attr, a)
@@ -605,19 +539,6 @@ func (e *Element) RemoveAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
 		if space == a.Space && skey == a.Key {
-			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return &a
-		}
-	}
-	return nil
-}
-
-// RemoveAttrFull removes and returns the first attribute of the element whose
-// namespace and key match the given values. If an equal attibute does not
-// exist, nil is returned.  (DEPRECATED, use RemoveAttr instead.)
-func (e *Element) RemoveAttrFull(space, key string) *Attr {
-	for i, a := range e.Attr {
-		if a.Space == space && a.Key == key {
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
 			return &a
 		}
