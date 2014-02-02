@@ -136,6 +136,27 @@ func isWhitespace(s string) bool {
 	return true
 }
 
+// spaceMatch returns true if namespace a is the empty string
+// or if namespace a equals namespace b.
+func spaceMatch(a, b string) bool {
+	switch {
+	case a == "":
+		return true
+	default:
+		return a == b
+	}
+}
+
+// spaceDecompose breaks a namespace:tag identifier at the ':'
+// and returns the two parts.
+func spaceDecompose(str string) (space, key string) {
+	colon := strings.IndexByte(str, ':')
+	if colon == -1 {
+		return "", str
+	}
+	return str[:colon], str[colon+1:]
+}
+
 // Strings used by crIndent
 const (
 	crsp  = "\n                                                                "

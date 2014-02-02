@@ -309,26 +309,6 @@ func (s *selectDescendants) apply(e *Element, p *pather) {
 	}
 }
 
-// Break a string at ':' and return the two parts.
-func decompose(str string) (space, key string) {
-	colon := strings.IndexByte(str, ':')
-	if colon == -1 {
-		return "", str
-	}
-	return str[:colon], str[colon+1:]
-}
-
-// spaceMatch returns true if namespace a is the empty string
-// or if namespace a equals namespace b.
-func spaceMatch(a, b string) bool {
-	switch {
-	case a == "":
-		return true
-	default:
-		return a == b
-	}
-}
-
 // selectChildrenByTag selects into the candidate list all child
 // elements of the element having the specified tag.
 type selectChildrenByTag struct {
@@ -336,7 +316,7 @@ type selectChildrenByTag struct {
 }
 
 func newSelectChildrenByTag(path string) *selectChildrenByTag {
-	s, l := decompose(path)
+	s, l := spaceDecompose(path)
 	return &selectChildrenByTag{s, l}
 }
 
@@ -378,7 +358,7 @@ type filterAttr struct {
 }
 
 func newFilterAttr(str string) *filterAttr {
-	s, l := decompose(str)
+	s, l := spaceDecompose(str)
 	return &filterAttr{s, l}
 }
 
@@ -401,7 +381,7 @@ type filterAttrVal struct {
 }
 
 func newFilterAttrVal(str, value string) *filterAttrVal {
-	s, l := decompose(str)
+	s, l := spaceDecompose(str)
 	return &filterAttrVal{s, l, value}
 }
 
@@ -424,7 +404,7 @@ type filterChild struct {
 }
 
 func newFilterChild(str string) *filterChild {
-	s, l := decompose(str)
+	s, l := spaceDecompose(str)
 	return &filterChild{s, l}
 }
 
@@ -448,7 +428,7 @@ type filterChildText struct {
 }
 
 func newFilterChildText(str, text string) *filterChildText {
-	s, l := decompose(str)
+	s, l := spaceDecompose(str)
 	return &filterChildText{s, l, text}
 }
 

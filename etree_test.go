@@ -15,13 +15,13 @@ func TestDocument(t *testing.T) {
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 	store := doc.CreateElement("store")
-	store.CreateAttrFull("xmlns", "t", "urn:books-com:titles")
+	store.CreateAttr("xmlns:t", "urn:books-com:titles")
 	store.CreateDirective("Directive")
 	store.CreateComment("This is a comment")
 	book := store.CreateElement("book")
-	book.CreateAttrFull("", "lang", "fr")
+	book.CreateAttr("lang", "fr")
 	book.CreateAttr("lang", "en")
-	title := book.CreateElementFull("t", "title")
+	title := book.CreateElement("t:title")
 	title.SetText("Nicholas Nickleby")
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
@@ -74,52 +74,52 @@ func TestDocument(t *testing.T) {
 	}
 
 	// Perform some basic queries on the document
-	elements := doc.SelectElementsFull("", "store")
+	elements := doc.SelectElements("store")
 	if len(elements) != 1 || elements[0] != store {
-		t.Error("etree: incorrect SelectElementsFull result")
+		t.Error("etree: incorrect SelectElements result")
 	}
-	element := doc.SelectElementFull("", "store")
+	element := doc.SelectElement("store")
 	if element != store {
-		t.Error("etree: incorrect SelectElementFull result")
+		t.Error("etree: incorrect SelectElement result")
 	}
-	elements = store.SelectElementsFull("", "book")
+	elements = store.SelectElements("book")
 	if len(elements) != 1 || elements[0] != book {
-		t.Error("etree: incorrect SelectElementsFull result")
+		t.Error("etree: incorrect SelectElements result")
 	}
-	element = store.SelectElementFull("", "book")
+	element = store.SelectElement("book")
 	if element != book {
-		t.Error("etree: incorrect SelectElementFull result")
+		t.Error("etree: incorrect SelectElement result")
 	}
-	attr := book.SelectAttrFull("", "lang")
+	attr := book.SelectAttr("lang")
 	if attr == nil || attr.Key != "lang" || attr.Value != "en" {
-		t.Error("etree: incorrect SelectAttrFull result")
+		t.Error("etree: incorrect SelectAttr result")
 	}
-	if book.SelectAttrValueFull("", "lang", "unknown") != "en" {
-		t.Error("etree: incorrect SelectAttrValueFull result")
+	if book.SelectAttrValue("lang", "unknown") != "en" {
+		t.Error("etree: incorrect SelectAttrValue result")
 	}
-	if book.SelectAttrValueFull("t", "missing", "unknown") != "unknown" {
-		t.Error("etree: incorrect SelectAttrValueFull result")
+	if book.SelectAttrValue("t:missing", "unknown") != "unknown" {
+		t.Error("etree: incorrect SelectAttrValue result")
 	}
-	attr = book.RemoveAttrFull("", "lang")
+	attr = book.RemoveAttr("lang")
 	if attr.Value != "en" {
-		t.Error("etree: incorrect RemoveAttrFull result")
+		t.Error("etree: incorrect RemoveAttr result")
 	}
 	book.CreateAttr("lang", "de")
 	attr = book.RemoveAttr("lang")
 	if attr.Value != "de" {
 		t.Error("etree: incorrect RemoveAttr result")
 	}
-	element = book.SelectElementFull("t", "title")
+	element = book.SelectElement("t:title")
 	if element != title || element.Text() != "Great Expectations" || len(element.Attr) != 0 {
-		t.Error("etree: incorrect SelectElementFull result")
+		t.Error("etree: incorrect SelectElement result")
 	}
 	element = book.SelectElement("title")
 	if element != title {
 		t.Error("etree: incorrect SelectElement result")
 	}
-	element = book.SelectElementFull("", "title")
+	element = book.SelectElement("p:title")
 	if element != nil {
-		t.Error("etree: incorrect SelectElementFull result")
+		t.Error("etree: incorrect SelectElement result")
 	}
 	element = book.RemoveElement(title)
 	if element != title {
