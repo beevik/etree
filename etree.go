@@ -237,8 +237,8 @@ func (e *Element) SetText(text string) {
 }
 
 // CreateElement creates a child element of the receiving element and
-// gives it the specified tag.  The tag may contain a namespace prefixed
-// by a ':'.
+// gives it the specified tag.  The tag may be prefixed by a namespace
+// and a colon.
 func (e *Element) CreateElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	return e.createElement(space, stag)
@@ -313,8 +313,8 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 }
 
 // SelectAttr finds an element attribute matching the requested key
-// and returns it if found. The key may contain a namespace prefixed
-// by ':'.
+// and returns it if found. The key may be prefixed by a namespace
+// and a colon.
 func (e *Element) SelectAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
@@ -326,8 +326,8 @@ func (e *Element) SelectAttr(key string) *Attr {
 }
 
 // SelectAttrValue finds an element attribute matching the requested key
-// and returns its value if found.  The key may contain a namespace prefixed
-// by ':'.  If the key is not found, the dflt value is returned instead.
+// and returns its value if found. The key may be prefixed by a namespace
+// and a colon. If the key is not found, the dflt value is returned instead.
 func (e *Element) SelectAttrValue(key, dflt string) string {
 	space, skey := spaceDecompose(key)
 	for _, a := range e.Attr {
@@ -351,7 +351,7 @@ func (e *Element) ChildElements() []*Element {
 }
 
 // SelectElement returns the first child element with the given tag.
-// The tag may contain a namespace prefixed by ':'.
+// The tag may be prefixed by a namespace and a colon.
 func (e *Element) SelectElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	for _, t := range e.Child {
@@ -363,7 +363,7 @@ func (e *Element) SelectElement(tag string) *Element {
 }
 
 // SelectElements returns a slice of all child elements with the given tag.
-// The tag may contain a namespace, prefixed by ':'.
+// The tag may be prefixed by a namespace and a colon.
 func (e *Element) SelectElements(tag string) []*Element {
 	space, stag := spaceDecompose(tag)
 	elements := make([]*Element, 0)
@@ -512,7 +512,7 @@ func (e *Element) addChild(t Token) {
 }
 
 // CreateAttr creates an attribute and adds it to the receiving element.
-// The key may contain a namespace prefixed by ':'.  If an attribute with
+// The key may be prefixed by a namespace and a colon. If an attribute with
 // the key already exists, its value is replaced.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
@@ -533,7 +533,7 @@ func (e *Element) createAttr(space, key, value string) *Attr {
 }
 
 // RemoveAttr removes and returns the first attribute of the element whose key
-// matches the given key. The key may contain a namespace prefixed by ':'.
+// matches the given key. The key may be prefixed by a namespace and a colon.
 // If an equal attribute does not exist, nil is returned.
 func (e *Element) RemoveAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
