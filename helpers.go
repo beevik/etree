@@ -117,7 +117,7 @@ var xmlReplacer = strings.NewReplacer(
 	">", "&gt;",
 	"&", "&amp;",
 	"'", "&apos;",
-	`"`, "&quot",
+	`"`, "&quot;",
 )
 
 // escape generates an escaped XML string.
