@@ -554,7 +554,7 @@ func (a *Attr) writeTo(w *bufio.Writer) {
 	}
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
-	w.WriteString(a.Value)
+	w.WriteString(escape(a.Value))
 	w.WriteByte('"')
 }
 
