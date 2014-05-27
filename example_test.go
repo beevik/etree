@@ -5,8 +5,9 @@
 package etree_test
 
 import (
-	"github.com/beevik/etree"
 	"os"
+
+	"github.com/beevik/etree"
 )
 
 // Create an etree Document, add XML entities to it, and serialize it
@@ -20,7 +21,7 @@ func ExampleDocument_creating() {
 	people.CreateComment("These are all known people")
 
 	jon := people.CreateElement("Person")
-	jon.CreateAttr("name", "Jon")
+	jon.CreateAttr("name", "Jon O'Reilly")
 
 	sally := people.CreateElement("Person")
 	sally.CreateAttr("name", "Sally")
@@ -32,7 +33,7 @@ func ExampleDocument_creating() {
 	// <?xml-stylesheet type="text/xsl" href="style.xsl"?>
 	// <People>
 	//   <!--These are all known people-->
-	//   <Person name="Jon"/>
+	//   <Person name="Jon O&apos;Reilly"/>
 	//   <Person name="Sally"/>
 	// </People>
 }
