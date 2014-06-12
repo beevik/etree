@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -175,7 +176,7 @@ func (c *compiler) parsePath(path string) []segment {
 
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
-		c.err = ErrPath
+		c.err = fmt.Errorf("path cannot start with /: %s. %s", path, ErrPath)
 		return nil
 	}
 
@@ -200,7 +201,7 @@ func (c *compiler) parseSegment(path string) segment {
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
 		if fpath[len(fpath)-1] != ']' {
-			c.err = ErrPath
+			c.err = fmt.Errorf("expected '%s' to end with ]. %s", fpath, ErrPath)
 			break
 		}
 		seg.filters = append(seg.filters, c.parseFilter(fpath[:len(fpath)-1]))
@@ -227,7 +228,7 @@ func (c *compiler) parseSelector(path string) selector {
 // parseFilter parses a path filter contained within [brackets].
 func (c *compiler) parseFilter(path string) filter {
 	if len(path) == 0 {
-		c.err = ErrPath
+		c.err = fmt.Errorf("filter length cannot be 0. %s", ErrPath)
 		return nil
 	}
 
@@ -236,7 +237,10 @@ func (c *compiler) parseFilter(path string) filter {
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
 		if rindex != len(path)-1 {
-			c.err = ErrPath
+			c.err = fmt.Errorf("expected filter value to end with '. %s. %s",
+				path,
+				ErrPath,
+			)
 			return nil
 		}
 		switch {

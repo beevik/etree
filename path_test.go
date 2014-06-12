@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -123,7 +124,7 @@ func TestPath(t *testing.T) {
 	for _, test := range tests {
 		path, err := CompilePath(test.path)
 		if err != nil {
-			if r, ok := test.result.(errorResult); !ok || err.Error() != string(r) {
+			if r, ok := test.result.(errorResult); !ok || !strings.HasSuffix(err.Error(), string(r)) {
 				fail(t, test)
 			}
 			continue
