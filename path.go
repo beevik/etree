@@ -180,7 +180,7 @@ func (c *compiler) parsePath(path string) []segment {
 	}
 
 	// Split path into segment objects
-	segments := make([]segment, 0)
+	var segments []segment
 	for _, s := range strings.Split(path, "/") {
 		segments = append(segments, c.parseSegment(s))
 		if c.err != nil {

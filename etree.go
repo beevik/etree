@@ -17,11 +17,15 @@ import (
 )
 
 const (
-	NoIndent = -1 // Use with Indent to turn off indenting
+	// NoIndent is used with Indent to disable all indenting.
+	NoIndent = -1
 )
 
 var (
-	ErrXml  = errors.New("etree: invalid XML format")
+	// ErrXML is returned when XML parsing fails due to incorrect formatting.
+	ErrXML = errors.New("etree: invalid XML format")
+
+	// ErrPath is returned when an invalid etree path is provided.
 	ErrPath = errors.New("etree: invalid path")
 )
 
@@ -89,8 +93,8 @@ func NewDocument() *Document {
 }
 
 // Copy returns a recursive, deep copy of the document.
-func (doc *Document) Copy() *Document {
-	return &Document{*(doc.dup(nil).(*Element))}
+func (d *Document) Copy() *Document {
+	return &Document{*(d.dup(nil).(*Element))}
 }
 
 // Root returns the root element of the document, or nil if there is no root
@@ -110,7 +114,7 @@ func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	return d.Element.readFrom(r)
 }
 
-// ReadFromString reads XML from the string s into the document d.
+// ReadFromFile reads XML from the string s into the document d.
 func (d *Document) ReadFromFile(filename string) error {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -285,7 +289,7 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 		case err != nil:
 			return r.bytes, err
 		case stack.empty():
-			return r.bytes, ErrXml
+			return r.bytes, ErrXML
 		}
 
 		top := stack.peek().(*Element)
@@ -341,7 +345,7 @@ func (e *Element) SelectAttrValue(key, dflt string) string {
 // ChildElements returns all elements that are children of the
 // receiving element.
 func (e *Element) ChildElements() []*Element {
-	elements := make([]*Element, 0)
+	var elements []*Element
 	for _, t := range e.Child {
 		if c, ok := t.(*Element); ok {
 			elements = append(elements, c)
@@ -366,7 +370,7 @@ func (e *Element) SelectElement(tag string) *Element {
 // The tag may be prefixed by a namespace and a colon.
 func (e *Element) SelectElements(tag string) []*Element {
 	space, stag := spaceDecompose(tag)
-	elements := make([]*Element, 0)
+	var elements []*Element
 	for _, t := range e.Child {
 		if c, ok := t.(*Element); ok && spaceMatch(space, c.Space) && stag == c.Tag {
 			elements = append(elements, c)

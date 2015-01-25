@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-var testXml string = `
+var testXML = `
 <?xml version="1.0" encoding="UTF-8"?>
 <bookstore xmlns:p="urn:books-com:prices">
 
@@ -115,7 +115,7 @@ var tests = []test{
 
 func TestPath(t *testing.T) {
 	doc := NewDocument()
-	err := doc.ReadFromString(testXml)
+	err := doc.ReadFromString(testXML)
 	if err != nil {
 		t.Error(err)
 	}

@@ -57,9 +57,8 @@ func (f *fifo) remove() interface{} {
 func (f *fifo) len() int {
 	if f.tail >= f.head {
 		return f.tail - f.head
-	} else {
-		return len(f.data) - f.head + f.tail
 	}
+	return len(f.data) - f.head + f.tail
 }
 
 func (f *fifo) grow() {
