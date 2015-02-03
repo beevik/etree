@@ -44,13 +44,17 @@ func (f *fifo) add(value interface{}) {
 		f.grow()
 	}
 	f.data[f.tail] = value
-	f.tail = (f.tail + 1) % len(f.data)
+	if f.tail++; f.tail == len(f.data) {
+		f.tail = 0
+	}
 }
 
 func (f *fifo) remove() interface{} {
 	value := f.data[f.head]
 	f.data[f.head] = nil
-	f.head = (f.head + 1) % len(f.data)
+	if f.head++; f.head == len(f.data) {
+		f.head = 0
+	}
 	return value
 }
 
