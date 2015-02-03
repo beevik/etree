@@ -49,6 +49,14 @@ type Path struct {
 	segments []segment
 }
 
+// ErrPath is returned by path functions when an invalid etree path is provided.
+type ErrPath string
+
+// Error returns the string describing a path error.
+func (err ErrPath) Error() string {
+	return "etree: " + string(err)
+}
+
 // CompilePath creates an optimized version of an XPath-like string that
 // can be used to query elements in an element tree.
 func CompilePath(path string) (Path, error) {
