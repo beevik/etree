@@ -54,7 +54,7 @@ type Path struct {
 func CompilePath(path string) (Path, error) {
 	var comp compiler
 	segments := comp.parsePath(path)
-	if comp.err != nil {
+	if comp.err != ErrPath("") {
 		return Path{nil}, comp.err
 	}
 	return Path{segments}, nil
@@ -158,7 +158,7 @@ func (p *pather) eval(n node) {
 
 // A compiler generates a compiled path from a path string.
 type compiler struct {
-	err error
+	err ErrPath
 }
 
 // parsePath parses an XPath-like string describing a path
@@ -175,7 +175,7 @@ func (c *compiler) parsePath(path string) []segment {
 
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
-		c.err = ErrPath
+		c.err = ErrPath("paths cannot be absolute.")
 		return nil
 	}
 
@@ -183,7 +183,7 @@ func (c *compiler) parsePath(path string) []segment {
 	var segments []segment
 	for _, s := range strings.Split(path, "/") {
 		segments = append(segments, c.parseSegment(s))
-		if c.err != nil {
+		if c.err != ErrPath("") {
 			break
 		}
 	}
@@ -200,7 +200,7 @@ func (c *compiler) parseSegment(path string) segment {
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
 		if fpath[len(fpath)-1] != ']' {
-			c.err = ErrPath
+			c.err = ErrPath("path has invalid filter [brackets].")
 			break
 		}
 		seg.filters = append(seg.filters, c.parseFilter(fpath[:len(fpath)-1]))
@@ -227,7 +227,7 @@ func (c *compiler) parseSelector(path string) selector {
 // parseFilter parses a path filter contained within [brackets].
 func (c *compiler) parseFilter(path string) filter {
 	if len(path) == 0 {
-		c.err = ErrPath
+		c.err = ErrPath("path contains an empty filter expression.")
 		return nil
 	}
 
@@ -236,7 +236,7 @@ func (c *compiler) parseFilter(path string) filter {
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
 		if rindex != len(path)-1 {
-			c.err = ErrPath
+			c.err = ErrPath("path has mismatched filter quotes.")
 			return nil
 		}
 		switch {

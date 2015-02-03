@@ -21,13 +21,16 @@ const (
 	NoIndent = -1
 )
 
-var (
-	// ErrXML is returned when XML parsing fails due to incorrect formatting.
-	ErrXML = errors.New("etree: invalid XML format")
+// ErrXML is returned when XML parsing fails due to incorrect formatting.
+var ErrXML = errors.New("etree: invalid XML format")
 
-	// ErrPath is returned when an invalid etree path is provided.
-	ErrPath = errors.New("etree: invalid path")
-)
+// ErrPath is returned by path functions when an invalid etree path is provided.
+type ErrPath string
+
+// Error returns the string describing a path error.
+func (err ErrPath) Error() string {
+	return "etree: " + string(err)
+}
 
 // A Token is an empty interface that represents an Element,
 // Comment, CharData, or ProcInst.

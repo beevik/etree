@@ -4,9 +4,7 @@
 
 package etree
 
-import (
-	"testing"
-)
+import "testing"
 
 var testXML = `
 <?xml version="1.0" encoding="UTF-8"?>
@@ -106,11 +104,11 @@ var tests = []test{
 	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
 
 	// bad paths
-	{"/bookstore", errorResult("etree: invalid path")},
-	{"./bookstore/book[]", errorResult("etree: invalid path")},
-	{"./bookstore/book[@category='WEB'", errorResult("etree: invalid path")},
-	{"./bookstore/book[@category='WEB]", errorResult("etree: invalid path")},
-	{"./bookstore/book[author]a", errorResult("etree: invalid path")},
+	{"/bookstore", errorResult("etree: paths cannot be absolute.")},
+	{"./bookstore/book[]", errorResult("etree: path contains an empty filter expression.")},
+	{"./bookstore/book[@category='WEB'", errorResult("etree: path has invalid filter [brackets].")},
+	{"./bookstore/book[@category='WEB]", errorResult("etree: path has mismatched filter quotes.")},
+	{"./bookstore/book[author]a", errorResult("etree: path has invalid filter [brackets].")},
 }
 
 func TestPath(t *testing.T) {
