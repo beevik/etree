@@ -24,6 +24,15 @@ const (
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
+// SupportCanonicalXML can be enabled to allow for canonical xml output.
+// Setting the value to true will not autatically produce canonical XML, but it
+// will enable some behaviors that make it possible:
+// 	- Writing explicit end tags. (http://www.w3.org/TR/xml-c14n#Example-SETags)
+//	- Disabling the default escaping. Canonical escaping would still need to be
+// 		implemented outside of this package, and is specific to your use case and
+//		spec. (http://www.w3.org/TR/xml-c14n#Example-Chars)
+var SupportCanonicalXML = false
+
 // A Token is an empty interface that represents an Element,
 // Comment, CharData, or ProcInst.
 type Token interface {
@@ -501,7 +510,17 @@ func (e *Element) writeTo(w *bufio.Writer) {
 		w.WriteString(e.Tag)
 		w.WriteByte('>')
 	} else {
-		w.Write([]byte{'/', '>'})
+		if SupportCanonicalXML {
+			w.Write([]byte{'>', '<', '/'})
+			if e.Space != "" {
+				w.WriteString(e.Space)
+				w.WriteByte(':')
+			}
+			w.WriteString(e.Tag)
+			w.WriteByte('>')
+		} else {
+			w.Write([]byte{'/', '>'})
+		}
 	}
 }
 
@@ -553,7 +572,11 @@ func (a *Attr) writeTo(w *bufio.Writer) {
 	}
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
-	w.WriteString(escape(a.Value))
+	if SupportCanonicalXML {
+		w.WriteString(a.Value)
+	} else {
+		w.WriteString(escape(a.Value))
+	}
 	w.WriteByte('"')
 }
 
@@ -583,7 +606,11 @@ func (c *CharData) dup(parent *Element) Token {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer) {
-	w.WriteString(escape(c.Data))
+	if SupportCanonicalXML {
+		w.WriteString(c.Data)
+	} else {
+		w.WriteString(escape(c.Data))
+	}
 }
 
 // NewComment creates an XML comment.

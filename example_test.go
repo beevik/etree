@@ -38,6 +38,34 @@ func ExampleDocument_creating() {
 	// </People>
 }
 
+// Create an etree Document, add XML entities to it, and serialize it
+// to stdout.
+func ExampleDocument_creatingWithCanonicalSupport() {
+	etree.SupportCanonicalXML = true
+	doc := etree.NewDocument()
+	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
+
+	people := doc.CreateElement("People")
+	people.CreateComment("These are all known people")
+
+	jon := people.CreateElement("Person")
+	jon.CreateAttr("name", "Jon O'Reilly")
+
+	sally := people.CreateElement("Person")
+	sally.CreateAttr("name", "Sally")
+
+	doc.Indent(2)
+	doc.WriteTo(os.Stdout)
+	etree.SupportCanonicalXML = false
+	// Output:
+	// <?xml-stylesheet type="text/xsl" href="style.xsl"?>
+	// <People>
+	//   <!--These are all known people-->
+	//   <Person name="Jon O'Reilly"></Person>
+	//   <Person name="Sally"></Person>
+	// </People>
+}
+
 func ExampleDocument_reading() {
 	doc := etree.NewDocument()
 	if err := doc.ReadFromFile("document.xml"); err != nil {
