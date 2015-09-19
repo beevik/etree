@@ -685,7 +685,11 @@ func (p *ProcInst) dup(parent *Element) Token {
 func (p *ProcInst) writeTo(w *bufio.Writer) {
 	w.WriteString("<?")
 	w.WriteString(p.Target)
-	w.WriteByte(' ')
-	w.WriteString(p.Inst)
-	w.WriteString("?>")
+	if SupportCanonicalXML && p.Inst == "" {
+		w.WriteString("?>")
+	} else {
+		w.WriteByte(' ')
+		w.WriteString(p.Inst)
+		w.WriteString("?>")
+	}
 }
