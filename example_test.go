@@ -40,9 +40,11 @@ func ExampleDocument_creating() {
 
 // Create an etree Document, add XML entities to it, and serialize it
 // to stdout.
-func ExampleDocument_creatingWithCanonicalSupport() {
-	etree.SupportCanonicalXML = true
+func ExampleDocument_creatingWithNonDefaultWriteSettings() {
 	doc := etree.NewDocument()
+	doc.WriteSettings.EnableExplicitEndTags = true
+	doc.WriteSettings.EnableTextEscapeCodes = false
+	doc.WriteSettings.EnableAttrEscapeCodes = false
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 
 	people := doc.CreateElement("People")
@@ -56,7 +58,6 @@ func ExampleDocument_creatingWithCanonicalSupport() {
 
 	doc.Indent(2)
 	doc.WriteTo(os.Stdout)
-	etree.SupportCanonicalXML = false
 	// Output:
 	// <?xml-stylesheet type="text/xsl" href="style.xsl"?>
 	// <People>

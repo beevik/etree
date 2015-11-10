@@ -24,20 +24,27 @@ const (
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
-// SupportCanonicalXML can be enabled to allow for canonical xml output.
-// Setting the value to true will not autatically produce canonical XML, but it
-// will enable some behaviors that make it possible:
-// 	- Writing explicit end tags. (http://www.w3.org/TR/xml-c14n#Example-SETags)
-//	- Disabling the default escaping. Canonical escaping would still need to be
-// 		implemented outside of this package, and is specific to your use case and
-//		spec. (http://www.w3.org/TR/xml-c14n#Example-Chars)
-var SupportCanonicalXML = false
+// WriteSettings allow for changing the serialization behavior of the WriteTo*
+// methods
+type WriteSettings struct {
+	EnableExplicitEndTags bool
+	EnableTextEscapeCodes bool
+	EnableAttrEscapeCodes bool
+}
+
+func newWriteSettings() WriteSettings {
+	return WriteSettings{
+		EnableExplicitEndTags: false,
+		EnableTextEscapeCodes: true,
+		EnableAttrEscapeCodes: true,
+	}
+}
 
 // A Token is an empty interface that represents an Element,
 // Comment, CharData, or ProcInst.
 type Token interface {
 	dup(parent *Element) Token
-	writeTo(w *bufio.Writer)
+	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
 // A Document is the root level object in an etree.  It represents the
@@ -45,6 +52,7 @@ type Token interface {
 // its Child tokens.
 type Document struct {
 	Element
+	WriteSettings WriteSettings
 }
 
 // An Element represents an XML element, its attributes, and its child tokens.
@@ -93,12 +101,15 @@ func CreateDocument(root *Element) *Document {
 
 // NewDocument creates an empty XML document and returns it.
 func NewDocument() *Document {
-	return &Document{Element{Child: make([]Token, 0)}}
+	return &Document{
+		Element{Child: make([]Token, 0)},
+		newWriteSettings(),
+	}
 }
 
 // Copy returns a recursive, deep copy of the document.
 func (d *Document) Copy() *Document {
-	return &Document{*(d.dup(nil).(*Element))}
+	return &Document{*(d.dup(nil).(*Element)), d.WriteSettings}
 }
 
 // Root returns the root element of the document, or nil if there is no root
@@ -147,7 +158,7 @@ func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 	cw := newCountWriter(w)
 	b := bufio.NewWriter(cw)
 	for _, c := range d.Child {
-		c.writeTo(b)
+		c.writeTo(b, &d.WriteSettings)
 	}
 	err, n = b.Flush(), cw.bytes
 	return
@@ -486,7 +497,7 @@ func (e *Element) dup(parent *Element) Token {
 }
 
 // writeTo serializes the element to the writer w.
-func (e *Element) writeTo(w *bufio.Writer) {
+func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteByte('<')
 	if e.Space != "" {
 		w.WriteString(e.Space)
@@ -495,12 +506,12 @@ func (e *Element) writeTo(w *bufio.Writer) {
 	w.WriteString(e.Tag)
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
-		a.writeTo(w)
+		a.writeTo(w, s)
 	}
 	if len(e.Child) > 0 {
 		w.WriteString(">")
 		for _, c := range e.Child {
-			c.writeTo(w)
+			c.writeTo(w, s)
 		}
 		w.Write([]byte{'<', '/'})
 		if e.Space != "" {
@@ -510,7 +521,7 @@ func (e *Element) writeTo(w *bufio.Writer) {
 		w.WriteString(e.Tag)
 		w.WriteByte('>')
 	} else {
-		if SupportCanonicalXML {
+		if s.EnableExplicitEndTags {
 			w.Write([]byte{'>', '<', '/'})
 			if e.Space != "" {
 				w.WriteString(e.Space)
@@ -565,17 +576,17 @@ func (e *Element) RemoveAttr(key string) *Attr {
 }
 
 // writeTo serializes the attribute to the writer.
-func (a *Attr) writeTo(w *bufio.Writer) {
+func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	if a.Space != "" {
 		w.WriteString(a.Space)
 		w.WriteByte(':')
 	}
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
-	if SupportCanonicalXML {
-		w.WriteString(a.Value)
-	} else {
+	if s.EnableAttrEscapeCodes {
 		w.WriteString(escape(a.Value))
+	} else {
+		w.WriteString(a.Value)
 	}
 	w.WriteByte('"')
 }
@@ -605,11 +616,11 @@ func (c *CharData) dup(parent *Element) Token {
 }
 
 // writeTo serializes the character data entity to the writer.
-func (c *CharData) writeTo(w *bufio.Writer) {
-	if SupportCanonicalXML {
-		w.WriteString(c.Data)
-	} else {
+func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
+	if s.EnableTextEscapeCodes {
 		w.WriteString(escape(c.Data))
+	} else {
+		w.WriteString(c.Data)
 	}
 }
 
@@ -632,7 +643,7 @@ func (c *Comment) dup(parent *Element) Token {
 }
 
 // writeTo serialies the comment to the writer.
-func (c *Comment) writeTo(w *bufio.Writer) {
+func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString("<!--")
 	w.WriteString(c.Data)
 	w.WriteString("-->")
@@ -657,7 +668,7 @@ func (d *Directive) dup(parent *Element) Token {
 }
 
 // writeTo serializes the XML directive to the writer.
-func (d *Directive) writeTo(w *bufio.Writer) {
+func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString("<!")
 	w.WriteString(d.Data)
 	w.WriteString(">")
@@ -682,10 +693,10 @@ func (p *ProcInst) dup(parent *Element) Token {
 }
 
 // writeTo serializes the processing instruction to the writer.
-func (p *ProcInst) writeTo(w *bufio.Writer) {
+func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString("<?")
 	w.WriteString(p.Target)
-	if SupportCanonicalXML && p.Inst == "" {
+	if p.Inst == "" {
 		w.WriteString("?>")
 	} else {
 		w.WriteByte(' ')
