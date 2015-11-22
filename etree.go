@@ -209,6 +209,53 @@ func (e *Element) Copy() *Element {
 	return e.dup(parent).(*Element)
 }
 
+func (self *Element) Insert(index, value *Element) {
+	// Grow the slice by one element.
+	slice = self.Child[0 : len(self.Child)+1]
+	// Use copy to move the upper part of the slice out of the way and open a hole.
+	copy(slice[index+1:], slice[index:])
+	// Store the new value.
+	slice[index] = value
+	// Return the result.
+	self.Child = slice
+	return
+}
+
+func (self *Element) AddNext(e *Element) {
+	var lIdx int
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); c == self {
+			lIdx = idx
+		}
+	}
+	self.Parent.Insert(lIdx, e)
+}
+
+func (self *Element) GetNext() *Element {
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); c == self {
+			// must not bigger than len of child
+			if (idx + 1) > len(self.Parent.Child) {
+				return nil
+			}
+			return self.Child[idx+1].(*Element)
+		}
+	}
+	return nil
+}
+
+func (self *Element) GetPrevi() *Element {
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); c == self {
+			if idx == 0 { //must not -1
+				return nil
+			}
+			return self.Child[idx-1].(*Element)
+		}
+	}
+	return nil
+}
+
 // Text returns the characters immediately following the element's
 // opening tag.
 func (e *Element) Text() string {
