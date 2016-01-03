@@ -12,6 +12,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	//"log"
 	"os"
 	"strings"
 )
@@ -101,6 +102,15 @@ func (d *Document) Root() *Element {
 		}
 	}
 	return nil
+}
+
+func (d *Document) SetRoot(e *Element) {
+	for idx, t := range d.Child {
+		if _, ok := t.(*Element); ok {
+			d.Child[idx] = e
+		}
+	}
+	return
 }
 
 // ReadFrom reads XML from the reader r into the document d.
@@ -209,48 +219,72 @@ func (e *Element) Copy() *Element {
 	return e.dup(parent).(*Element)
 }
 
-func (self *Element) Insert(index, value *Element) {
+func (self *Element) Insert(index int, value *Element) {
 	// Grow the slice by one element.
-	slice = self.Child[0 : len(self.Child)+1]
+	// make([]Token, len(self.Child)+1)
+	// self.Child[0 : len(self.Child)+1]
+	self.Child = append(self.Child, value)
 	// Use copy to move the upper part of the slice out of the way and open a hole.
-	copy(slice[index+1:], slice[index:])
+	copy(self.Child[index+1:], self.Child[index:])
 	// Store the new value.
-	slice[index] = value
+	self.Child[index] = value
 	// Return the result.
-	self.Child = slice
 	return
 }
 
 func (self *Element) AddNext(e *Element) {
-	var lIdx int
 	for idx, t := range self.Parent.Child {
-		if c, ok := t.(*Element); c == self {
-			lIdx = idx
+		if c, ok := t.(*Element); ok && c == self {
+			//log.Println("AddNext", e.Tag)
+			// 重要！ 必须添加修改 parent 保持树关系
+			e.Parent = self.Parent
+			self.Parent.Insert(idx+1, e)
+			break
 		}
 	}
-	self.Parent.Insert(lIdx, e)
+
+}
+
+func (self *Element) AddPrevious(e *Element) {
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); ok && c == self {
+			//log.Println("AddPrevious 11", lIdx, e.Tag)
+			// 重要！ 必须添加修改 parent 保持树关系
+			e.Parent = self.Parent
+			self.Parent.Insert(idx, e)
+			break
+		}
+	}
 }
 
 func (self *Element) GetNext() *Element {
-	for idx, t := range self.Parent.Child {
-		if c, ok := t.(*Element); c == self {
-			// must not bigger than len of child
-			if (idx + 1) > len(self.Parent.Child) {
-				return nil
+	var isnext bool = false
+	for _, t := range self.Parent.Child {
+		// 判断是不是自己
+		if !isnext {
+			if c, ok := t.(*Element); ok && spaceMatch(c.Space, self.Space) && c.Tag == self.Tag {
+				isnext = true
+				continue
 			}
-			return self.Child[idx+1].(*Element)
+		}
+
+		if c, ok := t.(*Element); ok {
+			//log.Println("GetNext", c.Tag)
+			return c
 		}
 	}
 	return nil
 }
 
-func (self *Element) GetPrevi() *Element {
-	for idx, t := range self.Parent.Child {
-		if c, ok := t.(*Element); c == self {
-			if idx == 0 { //must not -1
-				return nil
+func (self *Element) GetPrevi() (ele *Element) {
+	for _, t := range self.Parent.Child {
+		if c, ok := t.(*Element); ok {
+			// 自己这返回 上次保存的 ele = c
+			if spaceMatch(c.Space, self.Space) && c.Tag == self.Tag {
+				return
 			}
-			return self.Child[idx-1].(*Element)
+			// 保持当前Ele 如果下个是自己则 Return
+			ele = c
 		}
 	}
 	return nil
