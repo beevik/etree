@@ -12,6 +12,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
+	//"log"
 	"os"
 	"strings"
 )
@@ -134,6 +135,15 @@ func (d *Document) Root() *Element {
 	return nil
 }
 
+func (d *Document) SetRoot(e *Element) {
+	for idx, t := range d.Child {
+		if _, ok := t.(*Element); ok {
+			d.Child[idx] = e
+		}
+	}
+	return
+}
+
 // ReadFrom reads XML from the reader r into the document d.
 // It returns the number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
@@ -238,6 +248,77 @@ func (d *Document) IndentTabs() {
 func (e *Element) Copy() *Element {
 	var parent *Element
 	return e.dup(parent).(*Element)
+}
+
+func (self *Element) Insert(index int, value *Element) {
+	// Grow the slice by one element.
+	// make([]Token, len(self.Child)+1)
+	// self.Child[0 : len(self.Child)+1]
+	self.Child = append(self.Child, value)
+	// Use copy to move the upper part of the slice out of the way and open a hole.
+	copy(self.Child[index+1:], self.Child[index:])
+	// Store the new value.
+	self.Child[index] = value
+	// Return the result.
+	return
+}
+
+func (self *Element) AddNext(e *Element) {
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); ok && c == self {
+			//log.Println("AddNext", e.Tag)
+			// 重要！ 必须添加修改 parent 保持树关系
+			e.Parent = self.Parent
+			self.Parent.Insert(idx+1, e)
+			break
+		}
+	}
+
+}
+
+func (self *Element) AddPrevious(e *Element) {
+	for idx, t := range self.Parent.Child {
+		if c, ok := t.(*Element); ok && c == self {
+			//log.Println("AddPrevious 11", lIdx, e.Tag)
+			// 重要！ 必须添加修改 parent 保持树关系
+			e.Parent = self.Parent
+			self.Parent.Insert(idx, e)
+			break
+		}
+	}
+}
+
+func (self *Element) GetNext() *Element {
+	var isnext bool = false
+	for _, t := range self.Parent.Child {
+		// 判断是不是自己
+		if !isnext {
+			if c, ok := t.(*Element); ok && spaceMatch(c.Space, self.Space) && c.Tag == self.Tag {
+				isnext = true
+				continue
+			}
+		}
+
+		if c, ok := t.(*Element); ok {
+			//log.Println("GetNext", c.Tag)
+			return c
+		}
+	}
+	return nil
+}
+
+func (self *Element) GetPrevi() (ele *Element) {
+	for _, t := range self.Parent.Child {
+		if c, ok := t.(*Element); ok {
+			// 自己这返回 上次保存的 ele = c
+			if spaceMatch(c.Space, self.Space) && c.Tag == self.Tag {
+				return
+			}
+			// 保持当前Ele 如果下个是自己则 Return
+			ele = c
+		}
+	}
+	return nil
 }
 
 // Text returns the characters immediately following the element's
