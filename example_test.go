@@ -42,9 +42,9 @@ func ExampleDocument_creating() {
 // to stdout.
 func ExampleDocument_creatingWithNonDefaultWriteSettings() {
 	doc := etree.NewDocument()
-	doc.WriteSettings.EnableExplicitEndTags = true
-	doc.WriteSettings.EnableTextEscapeCodes = false
-	doc.WriteSettings.EnableAttrEscapeCodes = false
+	doc.WriteSettings.EnableCanonicalEndTags = true
+	doc.WriteSettings.EnableCanonicalText = true
+	doc.WriteSettings.EnableCanonicalAttrVal = true
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 
 	people := doc.CreateElement("People")
@@ -52,9 +52,11 @@ func ExampleDocument_creatingWithNonDefaultWriteSettings() {
 
 	jon := people.CreateElement("Person")
 	jon.CreateAttr("name", "Jon O'Reilly")
+	jon.SetText("<'\">&")
 
 	sally := people.CreateElement("Person")
 	sally.CreateAttr("name", "Sally")
+	sally.CreateAttr("escape", "<'\">&")
 
 	doc.Indent(2)
 	doc.WriteTo(os.Stdout)
@@ -62,8 +64,8 @@ func ExampleDocument_creatingWithNonDefaultWriteSettings() {
 	// <?xml-stylesheet type="text/xsl" href="style.xsl"?>
 	// <People>
 	//   <!--These are all known people-->
-	//   <Person name="Jon O'Reilly"></Person>
-	//   <Person name="Sally"></Person>
+	//   <Person name="Jon O'Reilly">&lt;'"&gt;&amp;</Person>
+	//   <Person name="Sally" escape="&lt;'&quot;>&amp;"></Person>
 	// </People>
 }
 

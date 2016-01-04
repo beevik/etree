@@ -17,8 +17,6 @@ module. Some of the package's features include:
 See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
 documentation.
 
-[![views](https://sourcegraph.com/api/repos/github.com/beevik/etree/.counters/views.svg)](https://sourcegraph.com/github.com/beevik/etree)
-
 ###Example: Creating an XML document
 
 The following example creates an XML document from scratch using the etree

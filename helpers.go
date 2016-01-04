@@ -115,19 +115,6 @@ func (cw *countWriter) Write(p []byte) (n int, err error) {
 	return b, err
 }
 
-var xmlReplacer = strings.NewReplacer(
-	"<", "&lt;",
-	">", "&gt;",
-	"&", "&amp;",
-	"'", "&apos;",
-	`"`, "&quot;",
-)
-
-// escape generates an escaped XML string.
-func escape(s string) string {
-	return xmlReplacer.Replace(s)
-}
-
 // isWhitespace returns true if the byte slice contains only
 // whitespace characters.
 func isWhitespace(s string) bool {
