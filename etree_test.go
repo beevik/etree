@@ -131,6 +131,45 @@ func TestDocument(t *testing.T) {
 	}
 }
 
+func TestWriteSettings(t *testing.T) {
+	doc := NewDocument()
+	doc.WriteSettings.CanonicalEndTags = true
+	doc.WriteSettings.CanonicalText = true
+	doc.WriteSettings.CanonicalAttrVal = true
+	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
+
+	people := doc.CreateElement("People")
+	people.CreateComment("These are all known people")
+
+	jon := people.CreateElement("Person")
+	jon.CreateAttr("name", "Jon O'Reilly")
+	jon.SetText("<'\">&")
+
+	sally := people.CreateElement("Person")
+	sally.CreateAttr("name", "Sally")
+	sally.CreateAttr("escape", "<'\">&")
+
+	doc.Indent(2)
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: WriteSettings WriteTo produced incorrect result.")
+	}
+
+	expected := `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<People>
+  <!--These are all known people-->
+  <Person name="Jon O'Reilly">&lt;'"&gt;&amp;</Person>
+  <Person name="Sally" escape="&lt;'&quot;>&amp;"></Person>
+</People>
+`
+
+	if s != expected {
+		t.Error("etree: WriteSettings WriteTo produced unexpected result.")
+		t.Error("wanted:\n" + expected)
+		t.Error("got:\n" + s)
+	}
+}
+
 func TestCopy(t *testing.T) {
 	s := `<store>
 	<book lang="en">

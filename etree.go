@@ -27,27 +27,27 @@ var ErrXML = errors.New("etree: invalid XML format")
 // WriteSettings allow for changing the serialization behavior of the WriteTo*
 // methods.
 type WriteSettings struct {
-	// EnableCanonicalEndTags forces the production of XML end tags, even for
+	// CanonicalEndTags forces the production of XML end tags, even for
 	// elements that have no child elements. Default: false.
-	EnableCanonicalEndTags bool
+	CanonicalEndTags bool
 
-	// EnableCanonicalText forces the production of XML character references
+	// CanonicalText forces the production of XML character references
 	// for text data characters &, <, and >. If false, XML character references
 	// are also produced for " and '. Default: false.
-	EnableCanonicalText bool
+	CanonicalText bool
 
-	// EnableCanonicalAttrVal forces the production of XML character
+	// CanonicalAttrVal forces the production of XML character
 	// references for attribute value characters &, < and ". If false,
 	// XML character references are also produced for > and '. Default: false.
-	EnableCanonicalAttrVal bool
+	CanonicalAttrVal bool
 }
 
 // newWriteSettings creates a default WriteSettings record.
 func newWriteSettings() WriteSettings {
 	return WriteSettings{
-		EnableCanonicalEndTags: false,
-		EnableCanonicalText:    false,
-		EnableCanonicalAttrVal: false,
+		CanonicalEndTags: false,
+		CanonicalText:    false,
+		CanonicalAttrVal: false,
 	}
 }
 
@@ -532,7 +532,7 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 		w.WriteString(e.Tag)
 		w.WriteByte('>')
 	} else {
-		if s.EnableCanonicalEndTags {
+		if s.CanonicalEndTags {
 			w.Write([]byte{'>', '<', '/'})
 			if e.Space != "" {
 				w.WriteString(e.Space)
@@ -615,7 +615,7 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
 	var r *strings.Replacer
-	if s.EnableCanonicalAttrVal {
+	if s.CanonicalAttrVal {
 		r = xmlReplacerCanonicalAttrVal
 	} else {
 		r = xmlReplacerNormal
@@ -651,7 +651,7 @@ func (c *CharData) dup(parent *Element) Token {
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
 	var r *strings.Replacer
-	if s.EnableCanonicalText {
+	if s.CanonicalText {
 		r = xmlReplacerCanonicalText
 	} else {
 		r = xmlReplacerNormal
@@ -731,11 +731,9 @@ func (p *ProcInst) dup(parent *Element) Token {
 func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString("<?")
 	w.WriteString(p.Target)
-	if p.Inst == "" {
-		w.WriteString("?>")
-	} else {
+	if p.Inst != "" {
 		w.WriteByte(' ')
 		w.WriteString(p.Inst)
-		w.WriteString("?>")
 	}
+	w.WriteString("?>")
 }
