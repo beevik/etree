@@ -132,10 +132,13 @@ func TestDocument(t *testing.T) {
 }
 
 func TestWriteSettings(t *testing.T) {
+	BOM := "\xef\xbb\xbf"
+
 	doc := NewDocument()
 	doc.WriteSettings.CanonicalEndTags = true
 	doc.WriteSettings.CanonicalText = true
 	doc.WriteSettings.CanonicalAttrVal = true
+	doc.CreateCharData(BOM)
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 
 	people := doc.CreateElement("People")
@@ -155,7 +158,7 @@ func TestWriteSettings(t *testing.T) {
 		t.Error("etree: WriteSettings WriteTo produced incorrect result.")
 	}
 
-	expected := `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+	expected := BOM + `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
 <People>
   <!--These are all known people-->
   <Person name="Jon O'Reilly">&lt;'"&gt;&amp;</Person>
