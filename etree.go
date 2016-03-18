@@ -274,6 +274,19 @@ func (e *Element) CreateElement(tag string) *Element {
 	return e.createElement(space, stag)
 }
 
+// InsertElement creates a child element of the receiving element and gives
+// it the specified tag. It then inserts the element before the index'th
+// child token of the receiving element.
+func (e *Element) InsertElement(index int, tag string) *Element {
+	space, stag := spaceDecompose(tag)
+	c := e.createElement(space, stag)
+	if index+1 < len(e.Child) {
+		copy(e.Child[index+1:], e.Child[index:])
+		e.Child[index] = c
+	}
+	return c
+}
+
 // createElement is a helper function that creates new elements.
 func (e *Element) createElement(space, tag string) *Element {
 	c := &Element{
