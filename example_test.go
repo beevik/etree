@@ -53,9 +53,10 @@ func ExamplePath() {
 	doc := etree.NewDocument()
 	doc.ReadFromString(xml)
 	for _, e := range doc.FindElements(".//book[author='Charles Dickens']") {
-		book := etree.CreateDocument(e)
-		book.Indent(2)
-		book.WriteTo(os.Stdout)
+		doc := etree.NewDocument()
+		doc.SetRoot(e.Copy())
+		doc.Indent(2)
+		doc.WriteTo(os.Stdout)
 	}
 	// Output:
 	// <book>

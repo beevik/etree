@@ -4,9 +4,7 @@
 
 package etree
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestDocument(t *testing.T) {
 
@@ -26,8 +24,6 @@ func TestDocument(t *testing.T) {
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
 	author.CreateCharData("Charles Dickens")
-	year := book.InsertElement(1, "year")
-	year.SetText("1861")
 	doc.IndentTabs()
 
 	// Serialize the document to a string
@@ -44,7 +40,6 @@ func TestDocument(t *testing.T) {
 	<!--This is a comment-->
 	<book lang="en">
 		<t:title>Great Expectations</t:title>
-		<year>1861</year>
 		<author>Charles Dickens</author>
 	</book>
 </store>
@@ -61,7 +56,7 @@ func TestDocument(t *testing.T) {
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
-	if len(book.ChildElements()) != 3 || len(book.Attr) != 1 || len(book.Child) != 7 {
+	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
@@ -204,6 +199,8 @@ func TestCopy(t *testing.T) {
 
 	if s1 != s2 {
 		t.Error("etree: mismatched Copy result")
+		t.Error("wanted:\n" + s1)
+		t.Error("got:\n" + s2)
 	}
 
 	e1 := doc1.FindElement("./store/book/title")
