@@ -51,10 +51,11 @@ func newWriteSettings() WriteSettings {
 	}
 }
 
-// A Token is an empty interface that represents an Element, Comment,
-// CharData, or ProcInst.
+// A Token is an empty interface that represents an Element, CharData,
+// Comment, Directive, or ProcInst.
 type Token interface {
 	dup(parent *Element) Token
+	setParent(parent *Element)
 	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
@@ -80,37 +81,33 @@ type Attr struct {
 	Value      string // The attribute value string
 }
 
-// A Comment represents an XML comment.
-type Comment struct {
-	Data string
-}
-
 // CharData represents character data within XML.
 type CharData struct {
 	Data       string
+	Parent     *Element
 	whitespace bool
+}
+
+// A Comment represents an XML comment.
+type Comment struct {
+	Data   string
+	Parent *Element
 }
 
 // A Directive represents an XML directive.
 type Directive struct {
-	Data string
+	Data   string
+	Parent *Element
 }
 
 // A ProcInst represents an XML processing instruction.
 type ProcInst struct {
 	Target string
 	Inst   string
+	Parent *Element
 }
 
-// CreateDocument creates a new XML document with root
-// as the root element.
-func CreateDocument(root *Element) *Document {
-	doc := NewDocument()
-	doc.Child = append(doc.Child, root)
-	return doc
-}
-
-// NewDocument creates an empty XML document and returns it.
+// NewDocument creates an XML document without a root element.
 func NewDocument() *Document {
 	return &Document{
 		Element{Child: make([]Token, 0)},
@@ -132,6 +129,25 @@ func (d *Document) Root() *Element {
 		}
 	}
 	return nil
+}
+
+// SetRoot replaces the document's root element with e. If the document
+// already has a root when this function is called, then the document's
+// original root is unbound first. If the element e is bound to another
+// document (or to another element within a document), then it is unbound
+// first.
+func (d *Document) SetRoot(e *Element) {
+	if e.Parent != nil {
+		e.Parent.RemoveElement(e)
+	}
+	for i, t := range d.Child {
+		if _, ok := t.(*Element); ok {
+			d.Child[i].setParent(nil)
+			d.Child[i] = e
+			return
+		}
+	}
+	d.Child = append(d.Child, e)
 }
 
 // ReadFrom reads XML from the reader r into the document d.
@@ -231,9 +247,32 @@ func (d *Document) IndentTabs() {
 	d.Element.indent(0, indent)
 }
 
-// Copy creates a parentless, recursive, deep copy of the element and all its
-// attributes and children. The returned element has no parent but can be
-// parented to a document using the CreateDocument function.
+// NewElement creates an unparented element with the specified tag. The tag
+// may be prefixed by a namespace and a colon.
+func NewElement(tag string) *Element {
+	space, stag := spaceDecompose(tag)
+	return newElement(space, stag, nil)
+}
+
+// newElement is a helper function that creates an element and binds it to
+// a parent element if possible.
+func newElement(space, tag string, parent *Element) *Element {
+	e := &Element{
+		Space:  space,
+		Tag:    tag,
+		Attr:   make([]Attr, 0),
+		Child:  make([]Token, 0),
+		Parent: parent,
+	}
+	if parent != nil {
+		parent.addChild(e)
+	}
+	return e
+}
+
+// Copy creates a recursive, deep copy of the element and all its attributes
+// and children. The returned element has no parent but can be parented to a
+// another element using AddElement, or to a document using SetRoot.
 func (e *Element) Copy() *Element {
 	var parent *Element
 	return e.dup(parent).(*Element)
@@ -251,8 +290,7 @@ func (e *Element) Text() string {
 	return ""
 }
 
-// SetText replaces an element's subsidiary CharData text with a new
-// string.
+// SetText replaces an element's subsidiary CharData text with a new string.
 func (e *Element) SetText(text string) {
 	if len(e.Child) > 0 {
 		if cd, ok := e.Child[0].(*CharData); ok {
@@ -260,9 +298,9 @@ func (e *Element) SetText(text string) {
 			return
 		}
 	}
-	e.Child = append(e.Child, nil)
+	cd := newCharData(text, false, e)
 	copy(e.Child[1:], e.Child[0:])
-	e.Child[0] = newCharData(text, false)
+	e.Child[0] = cd
 }
 
 // CreateElement creates an element with the specified tag and adds it as the
@@ -270,43 +308,44 @@ func (e *Element) SetText(text string) {
 // and a colon.
 func (e *Element) CreateElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
-	return e.createElement(space, stag)
+	return newElement(space, stag, e)
 }
 
-// InsertElement creates n element with the specified tag and inserts it as a
-// child element of element e. It is inserted before the index'th child token
-// of element e.
-func (e *Element) InsertElement(index int, tag string) *Element {
-	space, stag := spaceDecompose(tag)
-	c := e.createElement(space, stag)
+// AddElement adds the element el as the last child of element e. If element
+// el was already the child of another element, it is first removed from its
+// current parent element.
+func (e *Element) AddElement(el *Element) {
+	if el.Parent != nil {
+		el.Parent.RemoveElement(el)
+	}
+	e.addChild(el)
+	el.Parent = e
+}
+
+// InsertElement inserts the element el after the index-th child token of
+// element e. If element el was already the child of another element, it is
+// removed from its current parent element first.
+func (e *Element) InsertElement(index int, el *Element) {
+	if el.Parent != nil {
+		el.Parent.RemoveElement(el)
+	}
 	if index+1 < len(e.Child) {
 		copy(e.Child[index+1:], e.Child[index:])
-		e.Child[index] = c
+		e.Child[index] = el
+	} else {
+		e.addChild(el)
 	}
-	return c
 }
 
-// createElement is a helper function that creates new elements.
-func (e *Element) createElement(space, tag string) *Element {
-	c := &Element{
-		Space:  space,
-		Tag:    tag,
-		Attr:   make([]Attr, 0),
-		Child:  make([]Token, 0),
-		Parent: e,
-	}
-	e.addChild(c)
-	return c
-}
-
-// RemoveElement removes the given child element. If an identical child
-// element does not exist, nil is returned.
+// RemoveElement attempts to remove the child element el from the element e.
+// If the element el is a child of e, it is returned. Otherwise nil is
+// returned.
 func (e *Element) RemoveElement(el *Element) *Element {
 	for i, t := range e.Child {
 		if c, ok := t.(*Element); ok && c == el {
-			e.Child = append(e.Child[0:i], e.Child[i+1:]...)
+			e.Child = append(e.Child[:i], e.Child[i+1:]...)
 			c.Parent = nil
-			return c
+			return el
 		}
 	}
 	return nil
@@ -334,7 +373,7 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 
 		switch t := t.(type) {
 		case xml.StartElement:
-			e := top.createElement(t.Name.Space, t.Name.Local)
+			e := newElement(t.Name.Space, t.Name.Local, top)
 			for _, a := range t.Attr {
 				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
 			}
@@ -343,13 +382,13 @@ func (e *Element) readFrom(ri io.Reader) (n int64, err error) {
 			stack.pop()
 		case xml.CharData:
 			data := string(t)
-			top.createCharData(data, isWhitespace(data))
+			newCharData(data, isWhitespace(data), top)
 		case xml.Comment:
-			top.CreateComment(string(t))
+			newComment(string(t), top)
 		case xml.Directive:
-			top.CreateDirective(string(t))
+			newDirective(string(t), top)
 		case xml.ProcInst:
-			top.CreateProcInst(t.Target, string(t.Inst))
+			newProcInst(t.Target, string(t.Inst), top)
 		}
 	}
 }
@@ -466,7 +505,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 		_, isCharData = c.(*CharData)
 		if !isCharData {
 			if !firstNonCharData || depth > 0 {
-				e.addChild(newCharData(indent(depth), true))
+				newCharData(indent(depth), true, e)
 			}
 			firstNonCharData = false
 		}
@@ -482,7 +521,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 	// Insert CR+indent before the last child.
 	if !isCharData {
 		if !firstNonCharData || depth > 0 {
-			e.addChild(newCharData(indent(depth-1), true))
+			newCharData(indent(depth-1), true, e)
 		}
 	}
 }
@@ -529,6 +568,11 @@ func (e *Element) dup(parent *Element) Token {
 		ne.Attr[i] = a
 	}
 	return ne
+}
+
+// setParent replaces the element's parent.
+func (e *Element) setParent(parent *Element) {
+	e.Parent = parent
 }
 
 // writeTo serializes the element to the writer w.
@@ -648,28 +692,43 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteByte('"')
 }
 
-// newCharData creates an XML character data entity.
-func newCharData(data string, whitespace bool) *CharData {
-	return &CharData{Data: data, whitespace: whitespace}
+// NewCharData creates a parentless XML character data entity.
+func NewCharData(data string) *CharData {
+	return newCharData(data, false, nil)
+}
+
+// newCharData creates an XML character data entity and binds it to a parent
+// element. If parent is nil, the CharData token remains unbound.
+func newCharData(data string, whitespace bool, parent *Element) *CharData {
+	c := &CharData{
+		Data:       data,
+		whitespace: whitespace,
+		Parent:     parent,
+	}
+	if parent != nil {
+		parent.addChild(c)
+	}
+	return c
 }
 
 // CreateCharData creates an XML character data entity and adds it as a child
 // of element e.
 func (e *Element) CreateCharData(data string) *CharData {
-	return e.createCharData(data, false)
-}
-
-// CreateCharData creates an XML character data entity and adds it as a child
-// of element e.
-func (e *Element) createCharData(data string, whitespace bool) *CharData {
-	c := newCharData(data, whitespace)
-	e.addChild(c)
-	return c
+	return newCharData(data, false, e)
 }
 
 // dup duplicates the character data.
 func (c *CharData) dup(parent *Element) Token {
-	return newCharData(c.Data, c.whitespace)
+	return &CharData{
+		Data:       c.Data,
+		whitespace: c.whitespace,
+		Parent:     parent,
+	}
+}
+
+// setParent replaces the character data's parent.
+func (c *CharData) setParent(parent *Element) {
+	c.Parent = parent
 }
 
 // writeTo serializes the character data entity to the writer.
@@ -683,21 +742,40 @@ func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString(r.Replace(c.Data))
 }
 
-// NewComment creates an XML comment.
-func newComment(comment string) *Comment {
-	return &Comment{Data: comment}
+// NewComment creates a parentless XML comment.
+func NewComment(comment string) *Comment {
+	return newComment(comment, nil)
+}
+
+// NewComment creates an XML comment and binds it to a parent element. If
+// parent is nil, the Comment remains unbound.
+func newComment(comment string, parent *Element) *Comment {
+	c := &Comment{
+		Data:   comment,
+		Parent: parent,
+	}
+	if parent != nil {
+		parent.addChild(c)
+	}
+	return c
 }
 
 // CreateComment creates an XML comment and adds it as a child of element e.
 func (e *Element) CreateComment(comment string) *Comment {
-	c := newComment(comment)
-	e.addChild(c)
-	return c
+	return newComment(comment, e)
 }
 
 // dup duplicates the comment.
 func (c *Comment) dup(parent *Element) Token {
-	return newComment(c.Data)
+	return &Comment{
+		Data:   c.Data,
+		Parent: parent,
+	}
+}
+
+// setParent replaces the comment's parent.
+func (c *Comment) setParent(parent *Element) {
+	c.Parent = parent
 }
 
 // writeTo serialies the comment to the writer.
@@ -707,22 +785,41 @@ func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString("-->")
 }
 
-// newDirective creates a new XML directive.
-func newDirective(data string) *Directive {
-	return &Directive{Data: data}
+// NewDirective creates a parentless XML directive.
+func NewDirective(data string) *Directive {
+	return newDirective(data, nil)
 }
 
-// CreateDirective creates an XML directive and adds it as a child of element
-// e.
-func (e *Element) CreateDirective(data string) *Directive {
-	d := newDirective(data)
-	e.addChild(d)
+// newDirective creates an XML directive and binds it to a parent element. If
+// parent is nil, the Directive remains unbound.
+func newDirective(data string, parent *Element) *Directive {
+	d := &Directive{
+		Data:   data,
+		Parent: parent,
+	}
+	if parent != nil {
+		parent.addChild(d)
+	}
 	return d
+}
+
+// CreateDirective creates an XML directive and adds it as the last child of
+// element e.
+func (e *Element) CreateDirective(data string) *Directive {
+	return newDirective(data, e)
 }
 
 // dup duplicates the directive.
 func (d *Directive) dup(parent *Element) Token {
-	return newDirective(d.Data)
+	return &Directive{
+		Data:   d.Data,
+		Parent: parent,
+	}
+}
+
+// setParent replaces the directive's parent.
+func (d *Directive) setParent(parent *Element) {
+	d.Parent = parent
 }
 
 // writeTo serializes the XML directive to the writer.
@@ -732,22 +829,43 @@ func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString(">")
 }
 
-// newProcInst creates a new processing instruction.
-func newProcInst(target, inst string) *ProcInst {
-	return &ProcInst{Target: target, Inst: inst}
+// NewProcInst creates a parentless XML processing instruction.
+func NewProcInst(target, inst string) *ProcInst {
+	return newProcInst(target, inst, nil)
+}
+
+// newProcInst creates an XML processing instruction and binds it to a parent
+// element. If parent is nil, the ProcInst remains unbound.
+func newProcInst(target, inst string, parent *Element) *ProcInst {
+	p := &ProcInst{
+		Target: target,
+		Inst:   inst,
+		Parent: parent,
+	}
+	if parent != nil {
+		parent.addChild(p)
+	}
+	return p
 }
 
 // CreateProcInst creates a processing instruction and adds it as a child of
 // element e.
 func (e *Element) CreateProcInst(target, inst string) *ProcInst {
-	p := newProcInst(target, inst)
-	e.addChild(p)
-	return p
+	return newProcInst(target, inst, e)
 }
 
 // dup duplicates the procinst.
 func (p *ProcInst) dup(parent *Element) Token {
-	return newProcInst(p.Target, p.Inst)
+	return &ProcInst{
+		Target: p.Target,
+		Inst:   p.Inst,
+		Parent: parent,
+	}
+}
+
+// setParent replaces the processing instruction's parent.
+func (p *ProcInst) setParent(parent *Element) {
+	p.Parent = parent
 }
 
 // writeTo serializes the processing instruction to the writer.

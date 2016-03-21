@@ -4,9 +4,7 @@
 
 package etree
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestDocument(t *testing.T) {
 
@@ -26,8 +24,6 @@ func TestDocument(t *testing.T) {
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
 	author.CreateCharData("Charles Dickens")
-	year := book.InsertElement(1, "year")
-	year.SetText("1861")
 	doc.IndentTabs()
 
 	// Serialize the document to a string
@@ -44,7 +40,6 @@ func TestDocument(t *testing.T) {
 	<!--This is a comment-->
 	<book lang="en">
 		<t:title>Great Expectations</t:title>
-		<year>1861</year>
 		<author>Charles Dickens</author>
 	</book>
 </store>
@@ -61,7 +56,7 @@ func TestDocument(t *testing.T) {
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
-	if len(book.ChildElements()) != 3 || len(book.Attr) != 1 || len(book.Child) != 7 {
+	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
@@ -185,18 +180,18 @@ func TestCopy(t *testing.T) {
 	</book>
 </store>`
 
-	doc1 := NewDocument()
-	err := doc1.ReadFromString(s)
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
 	if err != nil {
 		t.Error("etree: incorrect ReadFromString result")
 	}
 
-	s1, err := doc1.WriteToString()
+	s1, err := doc.WriteToString()
 	if err != nil {
 		t.Error("etree: incorrect WriteToString result")
 	}
 
-	doc2 := doc1.Copy()
+	doc2 := doc.Copy()
 	s2, err := doc2.WriteToString()
 	if err != nil {
 		t.Error("etree: incorrect Copy result")
@@ -204,9 +199,11 @@ func TestCopy(t *testing.T) {
 
 	if s1 != s2 {
 		t.Error("etree: mismatched Copy result")
+		t.Error("wanted:\n" + s1)
+		t.Error("got:\n" + s2)
 	}
 
-	e1 := doc1.FindElement("./store/book/title")
+	e1 := doc.FindElement("./store/book/title")
 	e2 := doc2.FindElement("./store/book/title")
 	if e1 == nil || e2 == nil {
 		t.Error("etree: incorrect FindElement result")
@@ -216,9 +213,62 @@ func TestCopy(t *testing.T) {
 	}
 
 	e1.Parent.RemoveElement(e1)
-	s1, _ = doc1.WriteToString()
+	s1, _ = doc.WriteToString()
 	s2, _ = doc2.WriteToString()
 	if s1 == s2 {
 		t.Error("etree: incorrect result after RemoveElement")
+	}
+}
+
+func TestAddElement(t *testing.T) {
+	testdoc := `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<store xmlns:t="urn:books-com:titles">
+    <!Directive>
+    <!--This is a comment-->
+    <book lang="en">
+        <t:title>Great Expectations</t:title>
+        <author>Charles Dickens</author>
+    </book>
+</store>
+`
+	doc1 := NewDocument()
+	err := doc1.ReadFromString(testdoc)
+	if err != nil {
+		t.Error("etree ReadFromString: " + err.Error())
+	}
+
+	doc2 := NewDocument()
+	root := doc2.CreateElement("root")
+
+	for _, e := range doc1.FindElements("//book/*") {
+		root.AddElement(e)
+	}
+
+	expected1 := `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<store xmlns:t="urn:books-com:titles">
+  <!Directive>
+  <!--This is a comment-->
+  <book lang="en"/>
+</store>
+`
+	expected2 := `<root>
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+</root>
+`
+
+	doc1.Indent(2)
+	s1, _ := doc1.WriteToString()
+
+	if s1 != expected1 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s1, expected1)
+	}
+
+	doc2.Indent(2)
+	s2, _ := doc2.WriteToString()
+	if s2 != expected2 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s2, expected2)
 	}
 }
