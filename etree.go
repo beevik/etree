@@ -1,4 +1,4 @@
-// Copyright 2016 Brett Vickers.
+// Copyright 2015 Brett Vickers.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -60,8 +60,10 @@ type Token interface {
 	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
-// A Document is the root level object in an etree.  It represents the XML
-// document as a whole.  It embeds an Element to hold all child tokens.
+// A Document is a container holding a complete XML hierarchy. Its embedded
+// element contains zero or more children, one of which is usually the root
+// element.  The embedded element may include other children such as
+// processing instructions or BOM CharData tokens.
 type Document struct {
 	Element
 	WriteSettings WriteSettings
@@ -140,9 +142,11 @@ func (d *Document) SetRoot(e *Element) {
 	if e.parent != nil {
 		e.parent.RemoveChild(e)
 	}
+	e.setParent(&d.Element)
+
 	for i, t := range d.Child {
 		if _, ok := t.(*Element); ok {
-			d.Child[i].setParent(nil)
+			t.setParent(nil)
 			d.Child[i] = e
 			return
 		}
@@ -150,8 +154,8 @@ func (d *Document) SetRoot(e *Element) {
 	d.Child = append(d.Child, e)
 }
 
-// ReadFrom reads XML from the reader r into the document d.
-// It returns the number of bytes read and any error encountered.
+// ReadFrom reads XML from the reader r into the document d. It returns the
+// number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	return d.Element.readFrom(r)
 }

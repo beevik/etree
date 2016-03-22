@@ -6,6 +6,15 @@ package etree
 
 import "testing"
 
+func checkEq(t *testing.T, got, want string) {
+	if got == want {
+		return
+	}
+	t.Errorf(
+		"etree: unexpected result.\nGot:\n%s\nWanted:\n%s\n",
+		got, want)
+}
+
 func TestDocument(t *testing.T) {
 
 	// Create a document
@@ -44,10 +53,7 @@ func TestDocument(t *testing.T) {
 	</book>
 </store>
 `
-	if expected != s {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n",
-			s, expected)
-	}
+	checkEq(t, s, expected)
 
 	// Test the structure of the XML
 	if doc.Root() != store {
@@ -164,12 +170,7 @@ func TestWriteSettings(t *testing.T) {
   <Person name="Sally" escape="&lt;'&quot;>&amp;"></Person>
 </People>
 `
-
-	if s != expected {
-		t.Error("etree: WriteSettings WriteTo produced unexpected result.")
-		t.Error("wanted:\n" + expected)
-		t.Error("got:\n" + s)
-	}
+	checkEq(t, s, expected)
 }
 
 func TestCopy(t *testing.T) {
@@ -183,7 +184,7 @@ func TestCopy(t *testing.T) {
 	doc := NewDocument()
 	err := doc.ReadFromString(s)
 	if err != nil {
-		t.Error("etree: incorrect ReadFromString result")
+		t.Fatal("etree: incorrect ReadFromString result")
 	}
 
 	s1, err := doc.WriteToString()
@@ -230,7 +231,7 @@ func TestInsertChild(t *testing.T) {
 	doc := NewDocument()
 	err := doc.ReadFromString(testdoc)
 	if err != nil {
-		t.Error("etree ReadFromString: " + err.Error())
+		t.Fatal("etree ReadFromString: " + err.Error())
 	}
 
 	year := NewElement("year")
@@ -247,9 +248,7 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s1, _ := doc.WriteToString()
-	if s1 != expected1 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s1, expected1)
-	}
+	checkEq(t, s1, expected1)
 
 	book.RemoveChild(year)
 	book.InsertChild(book.SelectElement("author"), year)
@@ -262,9 +261,7 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s2, _ := doc.WriteToString()
-	if s2 != expected2 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s2, expected2)
-	}
+	checkEq(t, s2, expected2)
 
 	book.RemoveChild(year)
 	book.InsertChild(book.SelectElement("UNKNOWN"), year)
@@ -277,9 +274,7 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s3, _ := doc.WriteToString()
-	if s3 != expected3 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s3, expected3)
-	}
+	checkEq(t, s3, expected3)
 
 	book.RemoveChild(year)
 	book.InsertChild(nil, year)
@@ -292,9 +287,7 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s4, _ := doc.WriteToString()
-	if s4 != expected4 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s4, expected4)
-	}
+	checkEq(t, s4, expected4)
 }
 
 func TestAddChild(t *testing.T) {
@@ -305,7 +298,7 @@ func TestAddChild(t *testing.T) {
 	doc1 := NewDocument()
 	err := doc1.ReadFromString(testdoc)
 	if err != nil {
-		t.Error("etree ReadFromString: " + err.Error())
+		t.Fatal("etree ReadFromString: " + err.Error())
 	}
 
 	doc2 := NewDocument()
@@ -317,21 +310,78 @@ func TestAddChild(t *testing.T) {
 
 	expected1 := `<book lang="en"/>
 `
+	doc1.Indent(2)
+	s1, _ := doc1.WriteToString()
+	checkEq(t, s1, expected1)
+
 	expected2 := `<root>
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
 </root>
 `
-	doc1.Indent(2)
-	s1, _ := doc1.WriteToString()
-
-	if s1 != expected1 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s1, expected1)
-	}
-
 	doc2.Indent(2)
 	s2, _ := doc2.WriteToString()
-	if s2 != expected2 {
-		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s2, expected2)
+	checkEq(t, s2, expected2)
+}
+
+func TestSetRoot(t *testing.T) {
+	testdoc := `<?test a="wow"?>
+<book>
+  <title>Great Expectations</title>
+  <author>Charles Dickens</author>
+</book>
+`
+	doc := NewDocument()
+	err := doc.ReadFromString(testdoc)
+	if err != nil {
+		t.Fatal("etree ReadFromString: " + err.Error())
 	}
+
+	origroot := doc.Root()
+	if origroot.Parent() != &doc.Element {
+		t.Error("Root incorrect")
+	}
+
+	newroot := NewElement("root")
+	doc.SetRoot(newroot)
+
+	if doc.Root() != newroot {
+		t.Error("doc.Root() != newroot")
+	}
+	if origroot.Parent() != nil {
+		t.Error("origroot.Parent() != nil")
+	}
+
+	expected1 := `<?test a="wow"?>
+<root/>
+`
+	doc.Indent(2)
+	s1, _ := doc.WriteToString()
+	checkEq(t, s1, expected1)
+
+	doc.SetRoot(origroot)
+	doc.Indent(2)
+	expected2 := testdoc
+	s2, _ := doc.WriteToString()
+	checkEq(t, s2, expected2)
+
+	doc2 := NewDocument()
+	doc2.CreateProcInst("test", `a="wow"`)
+	doc2.SetRoot(NewElement("root"))
+	doc2.Indent(2)
+	expected3 := expected1
+	s3, _ := doc2.WriteToString()
+	checkEq(t, s3, expected3)
+
+	doc2.SetRoot(doc.Root())
+	doc2.Indent(2)
+	expected4 := testdoc
+	s4, _ := doc2.WriteToString()
+	checkEq(t, s4, expected4)
+
+	expected5 := `<?test a="wow"?>
+`
+	doc.Indent(2)
+	s5, _ := doc.WriteToString()
+	checkEq(t, s5, expected5)
 }
