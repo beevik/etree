@@ -54,14 +54,14 @@ func newWriteSettings() WriteSettings {
 // A Token is an empty interface that represents an Element, CharData,
 // Comment, Directive, or ProcInst.
 type Token interface {
+	Parent() *Element
 	dup(parent *Element) Token
 	setParent(parent *Element)
 	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
 // A Document is the root level object in an etree.  It represents the XML
-// document as a whole.  It embeds an Element type but only uses the its Child
-// tokens.
+// document as a whole.  It embeds an Element to hold all child tokens.
 type Document struct {
 	Element
 	WriteSettings WriteSettings
@@ -72,7 +72,7 @@ type Element struct {
 	Space, Tag string   // namespace and tag
 	Attr       []Attr   // key-value attribute pairs
 	Child      []Token  // child tokens (elements, comments, etc.)
-	Parent     *Element // parent element
+	parent     *Element // parent element
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -84,27 +84,27 @@ type Attr struct {
 // CharData represents character data within XML.
 type CharData struct {
 	Data       string
-	Parent     *Element
+	parent     *Element
 	whitespace bool
 }
 
 // A Comment represents an XML comment.
 type Comment struct {
 	Data   string
-	Parent *Element
+	parent *Element
 }
 
 // A Directive represents an XML directive.
 type Directive struct {
 	Data   string
-	Parent *Element
+	parent *Element
 }
 
 // A ProcInst represents an XML processing instruction.
 type ProcInst struct {
 	Target string
 	Inst   string
-	Parent *Element
+	parent *Element
 }
 
 // NewDocument creates an XML document without a root element.
@@ -137,8 +137,8 @@ func (d *Document) Root() *Element {
 // document (or to another element within a document), then it is unbound
 // first.
 func (d *Document) SetRoot(e *Element) {
-	if e.Parent != nil {
-		e.Parent.RemoveElement(e)
+	if e.parent != nil {
+		e.parent.RemoveChild(e)
 	}
 	for i, t := range d.Child {
 		if _, ok := t.(*Element); ok {
@@ -262,7 +262,7 @@ func newElement(space, tag string, parent *Element) *Element {
 		Tag:    tag,
 		Attr:   make([]Attr, 0),
 		Child:  make([]Token, 0),
-		Parent: parent,
+		parent: parent,
 	}
 	if parent != nil {
 		parent.addChild(e)
@@ -311,41 +311,46 @@ func (e *Element) CreateElement(tag string) *Element {
 	return newElement(space, stag, e)
 }
 
-// AddElement adds the element el as the last child of element e. If element
-// el was already the child of another element, it is first removed from its
-// current parent element.
-func (e *Element) AddElement(el *Element) {
-	if el.Parent != nil {
-		el.Parent.RemoveElement(el)
+// AddChild adds the token t as the last child of element e. If token t was
+// already the child of another element, it is first removed from its current
+// parent element.
+func (e *Element) AddChild(t Token) {
+	if t.Parent() != nil {
+		t.Parent().RemoveChild(t)
 	}
-	e.addChild(el)
-	el.Parent = e
+	t.setParent(e)
+	e.addChild(t)
 }
 
-// InsertElement inserts the element el after the index-th child token of
-// element e. If element el was already the child of another element, it is
-// removed from its current parent element first.
-func (e *Element) InsertElement(index int, el *Element) {
-	if el.Parent != nil {
-		el.Parent.RemoveElement(el)
+// InsertChild inserts the token t before e's existing child token ex. If ex
+// is nil (or if ex is not a child of e), then t is added to the end of e's
+// child token list. If token t was already the child of another element, it
+// is first removed from its current parent element.
+func (e *Element) InsertChild(ex Token, t Token) {
+	if t.Parent() != nil {
+		t.Parent().RemoveChild(t)
 	}
-	if index+1 < len(e.Child) {
-		copy(e.Child[index+1:], e.Child[index:])
-		e.Child[index] = el
-	} else {
-		e.addChild(el)
+	t.setParent(e)
+
+	for i, c := range e.Child {
+		if c == ex {
+			copy(e.Child[i+1:], e.Child[i:])
+			e.Child[i] = t
+			return
+		}
 	}
+	e.addChild(t)
 }
 
-// RemoveElement attempts to remove the child element el from the element e.
-// If the element el is a child of e, it is returned. Otherwise nil is
-// returned.
-func (e *Element) RemoveElement(el *Element) *Element {
-	for i, t := range e.Child {
-		if c, ok := t.(*Element); ok && c == el {
+// RemoveChild attempts to remove the token t from element e's list of
+// children. If the token t is a child of e, then it is returned. Otherwise,
+// nil is returned.
+func (e *Element) RemoveChild(t Token) Token {
+	for i, c := range e.Child {
+		if c == t {
 			e.Child = append(e.Child[:i], e.Child[i+1:]...)
-			c.Parent = nil
-			return el
+			c.setParent(nil)
+			return t
 		}
 	}
 	return nil
@@ -559,7 +564,7 @@ func (e *Element) dup(parent *Element) Token {
 		Tag:    e.Tag,
 		Attr:   make([]Attr, len(e.Attr)),
 		Child:  make([]Token, len(e.Child)),
-		Parent: parent,
+		parent: parent,
 	}
 	for i, t := range e.Child {
 		ne.Child[i] = t.dup(ne)
@@ -570,9 +575,15 @@ func (e *Element) dup(parent *Element) Token {
 	return ne
 }
 
-// setParent replaces the element's parent.
+// Parent returns the element token's parent element, or nil if it has no
+// parent.
+func (e *Element) Parent() *Element {
+	return e.parent
+}
+
+// setParent replaces the element token's parent.
 func (e *Element) setParent(parent *Element) {
-	e.Parent = parent
+	e.parent = parent
 }
 
 // writeTo serializes the element to the writer w.
@@ -703,7 +714,7 @@ func newCharData(data string, whitespace bool, parent *Element) *CharData {
 	c := &CharData{
 		Data:       data,
 		whitespace: whitespace,
-		Parent:     parent,
+		parent:     parent,
 	}
 	if parent != nil {
 		parent.addChild(c)
@@ -722,13 +733,19 @@ func (c *CharData) dup(parent *Element) Token {
 	return &CharData{
 		Data:       c.Data,
 		whitespace: c.whitespace,
-		Parent:     parent,
+		parent:     parent,
 	}
 }
 
-// setParent replaces the character data's parent.
+// Parent returns the character data token's parent element, or nil if it has
+// no parent.
+func (c *CharData) Parent() *Element {
+	return c.parent
+}
+
+// setParent replaces the character data token's parent.
 func (c *CharData) setParent(parent *Element) {
-	c.Parent = parent
+	c.parent = parent
 }
 
 // writeTo serializes the character data entity to the writer.
@@ -752,7 +769,7 @@ func NewComment(comment string) *Comment {
 func newComment(comment string, parent *Element) *Comment {
 	c := &Comment{
 		Data:   comment,
-		Parent: parent,
+		parent: parent,
 	}
 	if parent != nil {
 		parent.addChild(c)
@@ -769,13 +786,18 @@ func (e *Element) CreateComment(comment string) *Comment {
 func (c *Comment) dup(parent *Element) Token {
 	return &Comment{
 		Data:   c.Data,
-		Parent: parent,
+		parent: parent,
 	}
 }
 
-// setParent replaces the comment's parent.
+// Parent returns comment token's parent element, or nil if it has no parent.
+func (c *Comment) Parent() *Element {
+	return c.parent
+}
+
+// setParent replaces the comment token's parent.
 func (c *Comment) setParent(parent *Element) {
-	c.Parent = parent
+	c.parent = parent
 }
 
 // writeTo serialies the comment to the writer.
@@ -795,7 +817,7 @@ func NewDirective(data string) *Directive {
 func newDirective(data string, parent *Element) *Directive {
 	d := &Directive{
 		Data:   data,
-		Parent: parent,
+		parent: parent,
 	}
 	if parent != nil {
 		parent.addChild(d)
@@ -813,13 +835,19 @@ func (e *Element) CreateDirective(data string) *Directive {
 func (d *Directive) dup(parent *Element) Token {
 	return &Directive{
 		Data:   d.Data,
-		Parent: parent,
+		parent: parent,
 	}
 }
 
-// setParent replaces the directive's parent.
+// Parent returns directive token's parent element, or nil if it has no
+// parent.
+func (d *Directive) Parent() *Element {
+	return d.parent
+}
+
+// setParent replaces the directive token's parent.
 func (d *Directive) setParent(parent *Element) {
-	d.Parent = parent
+	d.parent = parent
 }
 
 // writeTo serializes the XML directive to the writer.
@@ -840,7 +868,7 @@ func newProcInst(target, inst string, parent *Element) *ProcInst {
 	p := &ProcInst{
 		Target: target,
 		Inst:   inst,
-		Parent: parent,
+		parent: parent,
 	}
 	if parent != nil {
 		parent.addChild(p)
@@ -859,13 +887,19 @@ func (p *ProcInst) dup(parent *Element) Token {
 	return &ProcInst{
 		Target: p.Target,
 		Inst:   p.Inst,
-		Parent: parent,
+		parent: parent,
 	}
 }
 
-// setParent replaces the processing instruction's parent.
+// Parent returns processing instruction token's parent element, or nil if it
+// has no parent.
+func (p *ProcInst) Parent() *Element {
+	return p.parent
+}
+
+// setParent replaces the processing instruction token's parent.
 func (p *ProcInst) setParent(parent *Element) {
-	p.Parent = parent
+	p.parent = parent
 }
 
 // writeTo serializes the processing instruction to the writer.

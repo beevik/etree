@@ -283,8 +283,8 @@ func (s *selectSelf) apply(e *Element, p *pather) {
 type selectParent struct{}
 
 func (s *selectParent) apply(e *Element, p *pather) {
-	if e.Parent != nil {
-		p.candidates = append(p.candidates, e.Parent)
+	if e.parent != nil {
+		p.candidates = append(p.candidates, e.parent)
 	}
 }
 

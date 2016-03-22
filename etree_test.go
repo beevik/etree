@@ -65,10 +65,10 @@ func TestDocument(t *testing.T) {
 	if len(author.ChildElements()) != 0 || len(author.Child) != 1 || len(author.Attr) != 0 {
 		t.Error("etree: incorrect tree structure")
 	}
-	if book.Parent != store || store.Parent != &doc.Element || doc.Parent != nil {
+	if book.parent != store || store.parent != &doc.Element || doc.parent != nil {
 		t.Error("etree: incorrect tree structure")
 	}
-	if title.Parent != book || author.Parent != book {
+	if title.parent != book || author.parent != book {
 		t.Error("etree: incorrect tree structure")
 	}
 
@@ -120,7 +120,7 @@ func TestDocument(t *testing.T) {
 	if element != nil {
 		t.Error("etree: incorrect SelectElement result")
 	}
-	element = book.RemoveElement(title)
+	element = book.RemoveChild(title).(*Element)
 	if element != title {
 		t.Error("etree: incorrect RemoveElement result")
 	}
@@ -212,7 +212,7 @@ func TestCopy(t *testing.T) {
 		t.Error("etree: incorrect FindElement result")
 	}
 
-	e1.Parent.RemoveElement(e1)
+	e1.parent.RemoveChild(e1)
 	s1, _ = doc.WriteToString()
 	s2, _ = doc2.WriteToString()
 	if s1 == s2 {
@@ -220,17 +220,87 @@ func TestCopy(t *testing.T) {
 	}
 }
 
-func TestAddElement(t *testing.T) {
-	testdoc := `<?xml version="1.0" encoding="UTF-8"?>
-<?xml-stylesheet type="text/xsl" href="style.xsl"?>
-<store xmlns:t="urn:books-com:titles">
-    <!Directive>
-    <!--This is a comment-->
-    <book lang="en">
-        <t:title>Great Expectations</t:title>
-        <author>Charles Dickens</author>
-    </book>
-</store>
+func TestInsertChild(t *testing.T) {
+	testdoc := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+</book>
+`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(testdoc)
+	if err != nil {
+		t.Error("etree ReadFromString: " + err.Error())
+	}
+
+	year := NewElement("year")
+	year.SetText("1861")
+
+	book := doc.FindElement("//book")
+	book.InsertChild(book.SelectElement("t:title"), year)
+
+	expected1 := `<book lang="en">
+  <year>1861</year>
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+</book>
+`
+	doc.Indent(2)
+	s1, _ := doc.WriteToString()
+	if s1 != expected1 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s1, expected1)
+	}
+
+	book.RemoveChild(year)
+	book.InsertChild(book.SelectElement("author"), year)
+
+	expected2 := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <year>1861</year>
+  <author>Charles Dickens</author>
+</book>
+`
+	doc.Indent(2)
+	s2, _ := doc.WriteToString()
+	if s2 != expected2 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s2, expected2)
+	}
+
+	book.RemoveChild(year)
+	book.InsertChild(book.SelectElement("UNKNOWN"), year)
+
+	expected3 := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+  <year>1861</year>
+</book>
+`
+	doc.Indent(2)
+	s3, _ := doc.WriteToString()
+	if s3 != expected3 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s3, expected3)
+	}
+
+	book.RemoveChild(year)
+	book.InsertChild(nil, year)
+
+	expected4 := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+  <year>1861</year>
+</book>
+`
+	doc.Indent(2)
+	s4, _ := doc.WriteToString()
+	if s4 != expected4 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s4, expected4)
+	}
+}
+
+func TestAddChild(t *testing.T) {
+	testdoc := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
 `
 	doc1 := NewDocument()
 	err := doc1.ReadFromString(testdoc)
@@ -242,23 +312,16 @@ func TestAddElement(t *testing.T) {
 	root := doc2.CreateElement("root")
 
 	for _, e := range doc1.FindElements("//book/*") {
-		root.AddElement(e)
+		root.AddChild(e)
 	}
 
-	expected1 := `<?xml version="1.0" encoding="UTF-8"?>
-<?xml-stylesheet type="text/xsl" href="style.xsl"?>
-<store xmlns:t="urn:books-com:titles">
-  <!Directive>
-  <!--This is a comment-->
-  <book lang="en"/>
-</store>
+	expected1 := `<book lang="en"/>
 `
 	expected2 := `<root>
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
 </root>
 `
-
 	doc1.Indent(2)
 	s1, _ := doc1.WriteToString()
 
