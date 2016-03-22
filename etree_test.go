@@ -180,18 +180,18 @@ func TestCopy(t *testing.T) {
 	</book>
 </store>`
 
-	doc1 := NewDocument()
-	err := doc1.ReadFromString(s)
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
 	if err != nil {
 		t.Error("etree: incorrect ReadFromString result")
 	}
 
-	s1, err := doc1.WriteToString()
+	s1, err := doc.WriteToString()
 	if err != nil {
 		t.Error("etree: incorrect WriteToString result")
 	}
 
-	doc2 := doc1.Copy()
+	doc2 := doc.Copy()
 	s2, err := doc2.WriteToString()
 	if err != nil {
 		t.Error("etree: incorrect Copy result")
@@ -203,7 +203,7 @@ func TestCopy(t *testing.T) {
 		t.Error("got:\n" + s2)
 	}
 
-	e1 := doc1.FindElement("./store/book/title")
+	e1 := doc.FindElement("./store/book/title")
 	e2 := doc2.FindElement("./store/book/title")
 	if e1 == nil || e2 == nil {
 		t.Error("etree: incorrect FindElement result")
@@ -213,9 +213,62 @@ func TestCopy(t *testing.T) {
 	}
 
 	e1.Parent.RemoveElement(e1)
-	s1, _ = doc1.WriteToString()
+	s1, _ = doc.WriteToString()
 	s2, _ = doc2.WriteToString()
 	if s1 == s2 {
 		t.Error("etree: incorrect result after RemoveElement")
+	}
+}
+
+func TestAddElement(t *testing.T) {
+	testdoc := `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<store xmlns:t="urn:books-com:titles">
+    <!Directive>
+    <!--This is a comment-->
+    <book lang="en">
+        <t:title>Great Expectations</t:title>
+        <author>Charles Dickens</author>
+    </book>
+</store>
+`
+	doc1 := NewDocument()
+	err := doc1.ReadFromString(testdoc)
+	if err != nil {
+		t.Error("etree ReadFromString: " + err.Error())
+	}
+
+	doc2 := NewDocument()
+	root := doc2.CreateElement("root")
+
+	for _, e := range doc1.FindElements("//book/*") {
+		root.AddElement(e)
+	}
+
+	expected1 := `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<store xmlns:t="urn:books-com:titles">
+  <!Directive>
+  <!--This is a comment-->
+  <book lang="en"/>
+</store>
+`
+	expected2 := `<root>
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+</root>
+`
+
+	doc1.Indent(2)
+	s1, _ := doc1.WriteToString()
+
+	if s1 != expected1 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s1, expected1)
+	}
+
+	doc2.Indent(2)
+	s2, _ := doc2.WriteToString()
+	if s2 != expected2 {
+		t.Errorf("etree: serialization incorrect\ngot:\n%s\nwanted:\n%s\n", s2, expected2)
 	}
 }

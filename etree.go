@@ -312,11 +312,11 @@ func (e *Element) CreateElement(tag string) *Element {
 }
 
 // AddElement adds the element el as the last child of element e. If element
-// el was already the child of another element, it is removed from its current
-// parent element first.
+// el was already the child of another element, it is first removed from its
+// current parent element.
 func (e *Element) AddElement(el *Element) {
 	if el.Parent != nil {
-		el.Parent.RemoveElement(e)
+		el.Parent.RemoveElement(el)
 	}
 	e.addChild(el)
 	el.Parent = e
@@ -327,7 +327,7 @@ func (e *Element) AddElement(el *Element) {
 // removed from its current parent element first.
 func (e *Element) InsertElement(index int, el *Element) {
 	if el.Parent != nil {
-		el.Parent.RemoveElement(e)
+		el.Parent.RemoveElement(el)
 	}
 	if index+1 < len(e.Child) {
 		copy(e.Child[index+1:], e.Child[index:])
@@ -343,7 +343,7 @@ func (e *Element) InsertElement(index int, el *Element) {
 func (e *Element) RemoveElement(el *Element) *Element {
 	for i, t := range e.Child {
 		if c, ok := t.(*Element); ok && c == el {
-			e.Child = append(e.Child[0:i], e.Child[i+1:]...)
+			e.Child = append(e.Child[:i], e.Child[i+1:]...)
 			c.Parent = nil
 			return el
 		}
