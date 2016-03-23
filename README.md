@@ -15,12 +15,10 @@ module. Some of the package's features include:
 * Performs simple or complex searches with lightweight XPath-like query APIs.
 * Auto-indents XML using spaces or tabs for better readability.
 * Implemented in pure go; depends only on standard go libraries.
-* Built on top of the go [encoding/xml](http://golang.org/pkg/encoding/xml) package.
+* Built on top of the go [encoding/xml](http://golang.org/pkg/encoding/xml)
+  package.
 
-See http://godoc.org/github.com/beevik/etree for the godoc-formatted API
-documentation.
-
-###Example: Creating an XML document
+### Creating an XML document
 
 The following example creates an XML document from scratch using the etree
 package and outputs its indented contents to stdout.
@@ -53,10 +51,11 @@ Output:
 </People>
 ```
 
-###Document used by remaining examples
+### Reading an XML file
 
-All remaining examples will use the following `bookstore.xml` document as
-their source.
+Suppose you have a file on disk called `bookstore.xml` containing the
+following data:
+
 ```xml
 <bookstore xmlns:p="urn:schemas-books-com:prices">
 
@@ -95,9 +94,7 @@ their source.
 </bookstore>
 ```
 
-###Example: Reading an XML file
-
-This example loads XML from a file called `bookstore.xml`.
+This code reads the file's contents into an etree document.
 ```go
 doc := etree.NewDocument()
 if err := doc.ReadFromFile("bookstore.xml"); err != nil {
@@ -105,10 +102,12 @@ if err := doc.ReadFromFile("bookstore.xml"); err != nil {
 }
 ```
 
-###Example: Processing elements and attributes
+You can also read XML from a string, a byte slice, or an `io.Reader`.
 
-This example illustrates some ways to access elements and attributes
-using simple etree queries.
+### Processing elements and attributes
+
+This example illustrates several ways to access elements and attributes using
+etree selection queries.
 ```go
 root := doc.SelectElement("bookstore")
 fmt.Println("ROOT element:", root.Tag)
@@ -141,11 +140,12 @@ CHILD element: book
   ATTR: category=WEB
 ```
 
-###Example: Path queries
+### Path queries
 
-In this example, we select all book titles that fall into the category
-of 'WEB'.  The book elements are searched for recursively and may
-appear at any level of the tree.
+This example uses etree's path functions to select all book titles that fall
+into the category of 'WEB'.  The double-slash prefix in the path causes the
+search for book elements to occur recursively; book elements may appear at any
+level of the XML hierarchy.
 ```go
 for _, t := range doc.FindElements("//book[@category='WEB']/title") {
     fmt.Println("Title:", t.Text())
@@ -158,8 +158,8 @@ Title: XQuery Kick Start
 Title: Learning XML
 ```
 
-This example finds the first book element under the bookstore element
-and outputs the tag and text of all of its child elements.
+This example finds the first book element under the root bookstore element and
+outputs the tag and text of each of its child elements.
 ```go
 for _, e := range doc.FindElements("./bookstore/book[1]/*") {
     fmt.Printf("%s: %s\n", e.Tag, e.Text())
@@ -175,9 +175,6 @@ price: 30.00
 ```
 
 This example finds all books with a price of 49.99 and outputs their titles.
-Note that this example uses the FindElementsPath function, which takes as an
-argument a pre-compiled path object.  Use this API when you plan to search
-using the same path more than once.
 ```go
 path := etree.MustCompilePath("./bookstore/book[p:price='49.99']/title")
 for _, e := range doc.FindElementsPath(path) {
@@ -190,8 +187,17 @@ Output:
 XQuery Kick Start
 ```
 
+Note that this example uses the FindElementsPath function, which takes as an
+argument a pre-compiled path object. Use precompiled paths when you plan to
+search with the same path more than once.
+
+###Other features
+
+These are just a few examples of the things the etree package can do. See the
+[documentation](http://godoc.org/github.com/beevik/etree) for a complete
+description of its capabilities.
 
 ###Contributing
 
-This project accepts contributions. Just fork the repo and submit a pull request!
-
+This project accepts contributions. Just fork the repo and submit a pull
+request!
