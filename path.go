@@ -26,6 +26,7 @@ only the following limited syntax is supported:
     [tag]           Selects all elements with a child element named tag
     [tag='val']     Selects all elements with a child element named tag
                       and text equal to val
+    |               Selects the predicate on either side of the '|' operator
 
 Examples:
 
@@ -44,9 +45,12 @@ with an attribute 'language' set to 'english':
 Select all descendant book elements whose title element has an attribute
 'language' set to 'french':
     //book/title[@language='french']/..
+
+Select all title and year elements:
+    //title|//year
 */
 type Path struct {
-	segments []segment
+	groups []group
 }
 
 // ErrPath is returned by path functions when an invalid etree path is provided.
@@ -61,11 +65,11 @@ func (err ErrPath) Error() string {
 // can be used to query elements in an element tree.
 func CompilePath(path string) (Path, error) {
 	var comp compiler
-	segments := comp.parsePath(path)
+	groups := comp.parsePath(path)
 	if comp.err != ErrPath("") {
 		return Path{nil}, comp.err
 	}
-	return Path{segments}, nil
+	return Path{groups}, nil
 }
 
 // MustCompilePath creates an optimized version of an XPath-like string that
@@ -78,6 +82,18 @@ func MustCompilePath(path string) Path {
 		panic(err)
 	}
 	return p
+}
+
+// A group is a group of path segments. Each group appears between the '|'
+// operators in a path.
+type group struct {
+	segments []segment
+}
+
+func (g *group) apply(e *Element, p *pather) {
+	for _, ss := range g.segments {
+		ss.apply(e, p)
+	}
 }
 
 // A segment is a portion of a path between "/" characters.
@@ -137,8 +153,10 @@ func newPather() *pather {
 // and then returning all elements that match the path's selectors
 // and filters.
 func (p *pather) traverse(e *Element, path Path) []*Element {
-	for p.queue.add(node{e, path.segments}); p.queue.len() > 0; {
-		p.eval(p.queue.remove().(node))
+	for _, g := range path.groups {
+		for p.queue.add(node{e, g.segments}); p.queue.len() > 0; {
+			p.eval(p.queue.remove().(node))
+		}
 	}
 	return p.results
 }
@@ -171,8 +189,22 @@ type compiler struct {
 
 // parsePath parses an XPath-like string describing a path
 // through an element tree and returns a slice of segment
+// descriptor groups.
+func (c *compiler) parsePath(path string) []group {
+	var groups []group
+	for _, g := range strings.Split(path, "|") {
+		groups = append(groups, c.parseGroup(g))
+		if c.err != ErrPath("") {
+			break
+		}
+	}
+	return groups
+}
+
+// parseSegments parses an XPath-like string describing a path
+// through an element tree and returns a slice of segment
 // descriptors.
-func (c *compiler) parsePath(path string) []segment {
+func (c *compiler) parseGroup(path string) group {
 	// If path starts or ends with //, fix it
 	if strings.HasPrefix(path, "//") {
 		path = "." + path
@@ -184,7 +216,7 @@ func (c *compiler) parsePath(path string) []segment {
 	// Paths cannot be absolute
 	if strings.HasPrefix(path, "/") {
 		c.err = ErrPath("paths cannot be absolute.")
-		return nil
+		return group{nil}
 	}
 
 	// Split path into segment objects
@@ -195,7 +227,7 @@ func (c *compiler) parsePath(path string) []segment {
 			break
 		}
 	}
-	return segments
+	return group{segments}
 }
 
 // parseSegment parses a path segment between / characters.
