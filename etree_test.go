@@ -4,7 +4,10 @@
 
 package etree
 
-import "testing"
+import (
+	"io"
+	"testing"
+)
 
 func checkEq(t *testing.T, got, want string) {
 	if got == want {
@@ -133,6 +136,25 @@ func TestDocument(t *testing.T) {
 	element = book.SelectElement("title")
 	if element != nil {
 		t.Error("etree: incorrect SelectElement result")
+	}
+}
+
+func TestDocumentRead_NonUTF8Encodings(t *testing.T) {
+	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
+	<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	doc := NewDocument()
+	doc.ReadSettings.CharsetReader = func(label string, input io.Reader) (io.Reader, error) {
+		return input, nil
+	}
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
 	}
 }
 
