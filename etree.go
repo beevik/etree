@@ -31,6 +31,11 @@ type ReadSettings struct {
 	CharsetReader func(charset string, input io.Reader) (io.Reader, error)
 }
 
+// newReadSettings creates a default ReadSettings record.
+func newReadSettings() ReadSettings {
+	return ReadSettings{}
+}
+
 // WriteSettings allow for changing the serialization behavior of the WriteTo*
 // methods.
 type WriteSettings struct {
@@ -47,11 +52,6 @@ type WriteSettings struct {
 	// attribute value characters &, < and ". If false, XML character
 	// references are also produced for > and '. Default: false.
 	CanonicalAttrVal bool
-}
-
-// newReadSettings creates a default ReadSettings record.
-func newReadSettings() ReadSettings {
-	return ReadSettings{}
 }
 
 // newWriteSettings creates a default WriteSettings record.
