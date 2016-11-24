@@ -13,7 +13,7 @@ var testXML = `
 	<!Directive>
 
 	<book category="COOKING">
-		<title lang="en">Everyday Italian</title>
+		<title lang="en/fr">Everyday Italian</title>
 		<author>Giada De Laurentiis</author>
 		<year>2005</year>
 		<p:price>30.00</p:price>
@@ -96,7 +96,7 @@ var tests = []test{
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
-	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
+	{"./bookstore/book[@category='COOKING']/title[@lang='en/fr']", "Everyday Italian"},
 	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
 	{"./bookstore/book/title[@lang='fr']", nil},
 
