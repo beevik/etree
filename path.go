@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -187,14 +188,50 @@ func (c *compiler) parsePath(path string) []segment {
 		return nil
 	}
 
-	// Split path into segment objects
+	// Get all ranges that are in quotes
+	quotRegexp := regexp.MustCompile(`"(.*?)"`)
+	aposRegexp := regexp.MustCompile(`'(.*?)'`)
+	quotedRanges := append(quotRegexp.FindAllStringIndex(path, -1), aposRegexp.FindAllStringIndex(path, -1)...)
+
+	// Get every index of a forward slash that's not within quotes
+	var slashIndexes []int
+
+	for id, char := range path {
+		if char == '/' {
+			quoted := false
+			// Determine if the '/'' is inside quotes
+			for _, quoteRange := range quotedRanges {
+				if id > quoteRange[0] && id < quoteRange[1] {
+					quoted = true
+					break
+				}
+			}
+
+			// Keep track of index if the '/' is not inside quotes
+			if !quoted {
+				slashIndexes = append(slashIndexes, id)
+			}
+		}
+	}
+
+	// Split path by slashIndexes and parse them into segment objects
 	var segments []segment
-	for _, s := range strings.Split(path, "/") {
-		segments = append(segments, c.parseSegment(s))
+
+	for id, slashID := range slashIndexes {
+		var section string
+
+		if id == len(slashIndexes)-1 {
+			section = path[slashID+1:]
+		} else {
+			section = path[slashID+1 : slashIndexes[id+1]]
+		}
+
+		segments = append(segments, c.parseSegment(section))
 		if c.err != ErrPath("") {
 			break
 		}
 	}
+
 	return segments
 }
 
