@@ -189,13 +189,28 @@ func (c *compiler) parsePath(path string) []segment {
 
 	// Split path into segment objects
 	var segments []segment
-	for _, s := range strings.Split(path, "/") {
+	for _, s := range splitPath(path) {
 		segments = append(segments, c.parseSegment(s))
 		if c.err != ErrPath("") {
 			break
 		}
 	}
 	return segments
+}
+
+func splitPath(path string) []string {
+	pieces := make([]string, 0)
+	start := 0
+	inquote := false
+	for i := 0; i+1 <= len(path); i++ {
+		if path[i] == '\'' {
+			inquote = !inquote
+		} else if path[i] == '/' && !inquote {
+			pieces = append(pieces, path[start:i])
+			start = i + 1
+		}
+	}
+	return append(pieces, path[start:])
 }
 
 // parseSegment parses a path segment between / characters.

@@ -38,7 +38,7 @@ var testXML = `
 	</book>
 
 	<!-- Final book -->
-	<book category="WEB">
+	<book category="WEB" path="/books/xml">
 		<title lang="en">Learning XML</title>
 		<author>Erik T. Ray</author>
 		<year>2003</year>
@@ -96,6 +96,7 @@ var tests = []test{
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
+	{"./bookstore/book[@path='/books/xml']/title", []string{"Learning XML"}},
 	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
 	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
 	{"./bookstore/book/title[@lang='fr']", nil},
