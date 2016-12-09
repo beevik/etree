@@ -352,6 +352,7 @@ func (e *Element) InsertChild(ex Token, t Token) {
 
 	for i, c := range e.Child {
 		if c == ex {
+			e.Child = append(e.Child, nil)
 			copy(e.Child[i+1:], e.Child[i:])
 			e.Child[i] = t
 			return
