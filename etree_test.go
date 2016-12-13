@@ -173,11 +173,11 @@ func TestWriteSettings(t *testing.T) {
 
 	jon := people.CreateElement("Person")
 	jon.CreateAttr("name", "Jon O'Reilly")
-	jon.SetText("<'\">&")
+	jon.SetText("\r<'\">&")
 
 	sally := people.CreateElement("Person")
 	sally.CreateAttr("name", "Sally")
-	sally.CreateAttr("escape", "<'\">&")
+	sally.CreateAttr("escape", "\r\n\t<'\">&")
 
 	doc.Indent(2)
 	s, err := doc.WriteToString()
@@ -188,8 +188,8 @@ func TestWriteSettings(t *testing.T) {
 	expected := BOM + `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
 <People>
   <!--These are all known people-->
-  <Person name="Jon O'Reilly">&lt;'"&gt;&amp;</Person>
-  <Person name="Sally" escape="&lt;'&quot;>&amp;"></Person>
+  <Person name="Jon O'Reilly">&#xD;&lt;'"&gt;&amp;</Person>
+  <Person name="Sally" escape="&#xD;&#xA;&#x9;&lt;'&quot;>&amp;"></Person>
 </People>
 `
 	checkEq(t, s, expected)

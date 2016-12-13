@@ -696,12 +696,16 @@ var xmlReplacerCanonicalText = strings.NewReplacer(
 	"&", "&amp;",
 	"<", "&lt;",
 	">", "&gt;",
+	"\r", "&#xD;",
 )
 
 var xmlReplacerCanonicalAttrVal = strings.NewReplacer(
 	"&", "&amp;",
 	"<", "&lt;",
 	`"`, "&quot;",
+	"\t", "&#x9;",
+	"\n", "&#xA;",
+	"\r", "&#xD;",
 )
 
 // writeTo serializes the attribute to the writer.
