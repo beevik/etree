@@ -158,6 +158,22 @@ func TestDocumentRead_NonUTF8Encodings(t *testing.T) {
 	}
 }
 
+func TestDocumentRead_Permissive(t *testing.T) {
+	s := "<select disabled></select>"
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err == nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+
+	doc.ReadSettings.Permissive = true
+	err = doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+}
+
 func TestWriteSettings(t *testing.T) {
 	BOM := "\xef\xbb\xbf"
 
