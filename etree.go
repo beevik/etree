@@ -29,6 +29,10 @@ var ErrXML = errors.New("etree: invalid XML format")
 type ReadSettings struct {
 	// CharsetReader to be passed to standard xml.Decoder. Default: nil.
 	CharsetReader func(charset string, input io.Reader) (io.Reader, error)
+
+	// Permissive allows input containing common mistakes such as missing tags
+	// or attribute values. Default: false.
+	Permissive bool
 }
 
 // newReadSettings creates a default ReadSettings record.
@@ -171,7 +175,7 @@ func (d *Document) SetRoot(e *Element) {
 // ReadFrom reads XML from the reader r into the document d. It returns the
 // number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
-	return d.Element.readFrom(r, d.ReadSettings.CharsetReader)
+	return d.Element.readFrom(r, d.ReadSettings)
 }
 
 // ReadFromFile reads XML from the string s into the document d.
@@ -377,10 +381,11 @@ func (e *Element) RemoveChild(t Token) Token {
 
 // ReadFrom reads XML from the reader r and stores the result as a new child
 // of element e.
-func (e *Element) readFrom(ri io.Reader, charsetReader func(charset string, input io.Reader) (io.Reader, error)) (n int64, err error) {
+func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err error) {
 	r := newCountReader(ri)
 	dec := xml.NewDecoder(r)
-	dec.CharsetReader = charsetReader
+	dec.CharsetReader = settings.CharsetReader
+	dec.Strict = !settings.Permissive
 	var stack stack
 	stack.push(e)
 	for {
