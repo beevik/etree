@@ -191,13 +191,13 @@ Note that this example uses the FindElementsPath function, which takes as an
 argument a pre-compiled path object. Use precompiled paths when you plan to
 search with the same path more than once.
 
-###Other features
+### Other features
 
 These are just a few examples of the things the etree package can do. See the
 [documentation](http://godoc.org/github.com/beevik/etree) for a complete
 description of its capabilities.
 
-###Contributing
+### Contributing
 
 This project accepts contributions. Just fork the repo and submit a pull
 request!
