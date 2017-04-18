@@ -104,6 +104,10 @@ var tests = []test{
 	// parent queries
 	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
 
+	// 'Or' queries
+	{"./bookstore/book/title|./bookstore/book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
+	{"./bookstore/book/title|./bookstore/book/year", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML", "2005", "2005", "2003", "2003"}},
+
 	// bad paths
 	{"/bookstore", errorResult("etree: paths cannot be absolute.")},
 	{"./bookstore/book[]", errorResult("etree: path contains an empty filter expression.")},
@@ -123,7 +127,7 @@ func TestPath(t *testing.T) {
 		path, err := CompilePath(test.path)
 		if err != nil {
 			if r, ok := test.result.(errorResult); !ok || err.Error() != string(r) {
-				fail(t, test)
+				failError(t, test, err)
 			}
 			continue
 		}
@@ -134,24 +138,24 @@ func TestPath(t *testing.T) {
 
 		switch s := test.result.(type) {
 		case errorResult:
-			fail(t, test)
+			failError(t, test, nil)
 		case nil:
 			if element != nil || len(elements) != 0 {
-				fail(t, test)
+				failNil(t, test, elements)
 			}
 		case string:
 			if element == nil || element.Text() != s ||
 				len(elements) != 1 || elements[0].Text() != s {
-				fail(t, test)
+				failString(t, test, element)
 			}
 		case []string:
 			if element == nil || element.Text() != s[0] || len(elements) != len(s) {
-				fail(t, test)
+				failSlice(t, test, elements)
 				continue
 			}
 			for i := 0; i < len(elements); i++ {
 				if elements[i].Text() != s[i] {
-					fail(t, test)
+					failSlice(t, test, elements)
 					break
 				}
 			}
@@ -160,6 +164,39 @@ func TestPath(t *testing.T) {
 	}
 }
 
-func fail(t *testing.T, test test) {
+func failError(t *testing.T, test test, got error) {
 	t.Errorf("etree: failed test '%s'\n", test.path)
+	t.Errorf("Expected error: %s\n", string(test.result.(errorResult)))
+	if got == nil {
+		t.Error("Got error: nil\n")
+	} else {
+		t.Errorf("Got error: %s\n", got.Error())
+	}
+}
+
+func failNil(t *testing.T, test test, got []*Element) {
+	t.Errorf("etree: failed test '%s'\n", test.path)
+	t.Error("Expected: nil")
+	t.Error("Got:")
+	for _, e := range got {
+		t.Errorf("\t%s", e.Text())
+	}
+}
+
+func failString(t *testing.T, test test, got *Element) {
+	t.Errorf("etree: failed test '%s'\n", test.path)
+	t.Errorf("Expected: %s\n", test.result.(string))
+	t.Errorf("Got: %s\n", got.Text())
+}
+
+func failSlice(t *testing.T, test test, got []*Element) {
+	t.Errorf("etree: failed test '%s'\n", test.path)
+	t.Error("Expected:")
+	for _, s := range test.result.([]string) {
+		t.Errorf("\t%s", s)
+	}
+	t.Error("Got:")
+	for _, e := range got {
+		t.Errorf("\t%s", e.Text())
+	}
 }
