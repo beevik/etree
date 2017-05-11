@@ -93,6 +93,8 @@ var tests = []test{
 	{"./bookstore/book[author='Vaidyanathan Nagarajan']/title", "XQuery Kick Start"},
 	{"//book[p:price='29.99']/title", "Harry Potter"},
 	{"//book[price='29.99']/title", "Harry Potter"},
+	{"//book/price[text()='29.99']", "29.99"},
+	{"//book/author[text()='Kurt Cagle']", "Kurt Cagle"},
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},

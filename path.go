@@ -25,7 +25,8 @@ only the following limited syntax is supported:
     [@attrib='val'] Selects all elements with the given attribute set to val
     [tag]           Selects all elements with a child element named tag
     [tag='val']     Selects all elements with a child element named tag
-                      and text equal to val
+                      and text matching val
+    [text()='val']  Selects all elements whose text matches val
 
 Examples:
 
@@ -41,9 +42,14 @@ Starting from the current element, select all children of book elements
 with an attribute 'language' set to 'english':
     ./book/*[@language='english']
 
+Starting from the current element, select all children of book elements
+containing the text 'special':
+    ./book/*[text()='special']
+
 Select all descendant book elements whose title element has an attribute
 'language' set to 'french':
     //book/title[@language='french']/..
+
 */
 type Path struct {
 	segments []segment
@@ -254,7 +260,7 @@ func (c *compiler) parseFilter(path string) filter {
 		return nil
 	}
 
-	// Filter contains [@attr='val'] or [tag='val']?
+	// Filter contains [@attr='val'], [text()='val'], or [tag='val']?
 	eqindex := strings.Index(path, "='")
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
@@ -265,6 +271,8 @@ func (c *compiler) parseFilter(path string) filter {
 		switch {
 		case path[0] == '@':
 			return newFilterAttrVal(path[1:eqindex], path[eqindex+2:rindex])
+		case strings.HasPrefix(path, "text()"):
+			return newFilterTextVal(path[eqindex+2 : rindex])
 		default:
 			return newFilterChildText(path[:eqindex], path[eqindex+2:rindex])
 		}
@@ -415,6 +423,25 @@ func (f *filterAttrVal) apply(p *pather) {
 				p.scratch = append(p.scratch, c)
 				break
 			}
+		}
+	}
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
+}
+
+// filterTextVal filters the candidate list for elements having
+// text equal to the specified value.
+type filterTextVal struct {
+	val string
+}
+
+func newFilterTextVal(value string) *filterTextVal {
+	return &filterTextVal{value}
+}
+
+func (f *filterTextVal) apply(p *pather) {
+	for _, c := range p.candidates {
+		if c.Text() == f.val {
+			p.scratch = append(p.scratch, c)
 		}
 	}
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
