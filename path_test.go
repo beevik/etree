@@ -17,6 +17,7 @@ var testXML = `
 		<author>Giada De Laurentiis</author>
 		<year>2005</year>
 		<p:price>30.00</p:price>
+		<editor>Clarkson Potter</editor>
 	</book>
 
 	<book category="CHILDREN">
@@ -24,6 +25,8 @@ var testXML = `
 		<author>J K. Rowling</author>
 		<year>2005</year>
 		<p:price>29.99</p:price>
+		<editor></editor>
+		<editor/>
 	</book>
 
 	<book category="WEB">
@@ -35,6 +38,8 @@ var testXML = `
 		<author>Vaidyanathan Nagarajan</author>
 		<year>2003</year>
 		<p:price>49.99</p:price>
+		<editor>
+		</editor>
 	</book>
 
 	<!-- Final book -->
@@ -95,6 +100,7 @@ var tests = []test{
 	{"//book[price='29.99']/title", "Harry Potter"},
 	{"//book/price[text()='29.99']", "29.99"},
 	{"//book/author[text()='Kurt Cagle']", "Kurt Cagle"},
+	{"//book/editor[text()]", []string{"Clarkson Potter", "\n\t\t"}},
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
