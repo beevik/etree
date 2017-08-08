@@ -26,7 +26,7 @@ only the following limited syntax is supported:
     [tag]           Selects all elements with a child element named tag
     [tag='val']     Selects all elements with a child element named tag
                       and text matching val
-    [text()]        Selects all elements with non empty text
+    [text()]        Selects all elements with non-empty text
     [text()='val']  Selects all elements whose text matches val
 
 Examples:
@@ -283,8 +283,8 @@ func (c *compiler) parseFilter(path string) filter {
 	switch {
 	case path[0] == '@':
 		return newFilterAttr(path[1:])
-	case strings.HasPrefix(path, "text()"):
-		return newFilterTextAll()
+	case path == "text()":
+		return newFilterText()
 	case isInteger(path):
 		pos, _ := strconv.Atoi(path)
 		switch {
@@ -431,29 +431,34 @@ func (f *filterAttrVal) apply(p *pather) {
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
+// filterText filters the candidate list for elements having text.
+type filterText struct{}
+
+func newFilterText() *filterText {
+	return &filterText{}
+}
+
+func (f *filterText) apply(p *pather) {
+	for _, c := range p.candidates {
+		if c.Text() != "" {
+			p.scratch = append(p.scratch, c)
+		}
+	}
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
+}
+
 // filterTextVal filters the candidate list for elements having
 // text equal to the specified value.
 type filterTextVal struct {
 	val string
-	all bool
 }
 
 func newFilterTextVal(value string) *filterTextVal {
-	return &filterTextVal{val: value}
-}
-
-func newFilterTextAll() *filterTextVal {
-	return &filterTextVal{all: true}
+	return &filterTextVal{value}
 }
 
 func (f *filterTextVal) apply(p *pather) {
 	for _, c := range p.candidates {
-		if f.all {
-			if c.Text() != "" {
-				p.scratch = append(p.scratch, c)
-			}
-			continue
-		}
 		if c.Text() == f.val {
 			p.scratch = append(p.scratch, c)
 		}
