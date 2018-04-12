@@ -257,6 +257,26 @@ func TestCopy(t *testing.T) {
 	if s1 == s2 {
 		t.Error("etree: incorrect result after RemoveElement")
 	}
+
+	pa1 := e1.GetPath()
+	checkEq(t, pa1, "/title")
+
+	pa2 := e2.GetPath()
+	checkEq(t, pa2, "/store/book/title")
+
+	p1 := e1.GetRelativePath(nil)
+	checkEq(t, p1, "./title")
+
+	p2 := e1.GetRelativePath(e1)
+	checkEq(t, p2, "./")
+
+	e3 := doc.FindElement("./store")
+	e4 := e3.FindElement("./book/author")
+	p3 := e4.GetRelativePath(e3)
+	checkEq(t, p3, "./book/author")
+
+	p4 := e4.GetRelativePath(nil)
+	checkEq(t, p4, "./store/book/author")
 }
 
 func TestInsertChild(t *testing.T) {
