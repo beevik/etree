@@ -188,7 +188,7 @@ func (e *Element) GetRelativePath(source *Element) string {
 
 	findPathIndex := func(e *Element, path []*Element) int {
 		for i, ee := range path {
-			if e.Tag == ee.Tag {
+			if e == ee {
 				return i
 			}
 		}
