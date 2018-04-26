@@ -31,8 +31,11 @@ only the following limited syntax is supported:
 
 Examples:
 
-Select the title elements of all descendant book elements having a
-'category' attribute of 'WEB':
+Starting from the root element, select the bookstore child element:
+	/bookstore
+
+Starting from the root element, select the title elements of all descendant
+book elements having a 'category' attribute of 'WEB':
     //book[@category='WEB']/title
 
 Select the first book element with a title child containing the text
@@ -49,7 +52,7 @@ containing the text 'special':
 
 Select all descendant book elements whose title element has an attribute
 'language' set to 'french':
-    //book/title[@language='french']/..
+    .//book/title[@language='french']/..
 
 */
 type Path struct {
@@ -180,22 +183,20 @@ type compiler struct {
 // through an element tree and returns a slice of segment
 // descriptors.
 func (c *compiler) parsePath(path string) []segment {
-	// If path starts or ends with //, fix it
-	if strings.HasPrefix(path, "//") {
-		path = "." + path
-	}
+	// If path ends with //, fix it
 	if strings.HasSuffix(path, "//") {
 		path = path + "*"
 	}
 
-	// Paths cannot be absolute
+	var segments []segment
+
+	// Check for an absolute path
 	if strings.HasPrefix(path, "/") {
-		c.err = ErrPath("paths cannot be absolute.")
-		return nil
+		segments = append(segments, segment{new(selectRoot), []filter{}})
+		path = path[1:]
 	}
 
-	// Split path into segment objects
-	var segments []segment
+	// Split path into segments
 	for _, s := range splitPath(path) {
 		segments = append(segments, c.parseSegment(s))
 		if c.err != ErrPath("") {
@@ -225,7 +226,7 @@ func (c *compiler) parseSegment(path string) segment {
 	pieces := strings.Split(path, "[")
 	seg := segment{
 		sel:     c.parseSelector(pieces[0]),
-		filters: make([]filter, 0),
+		filters: []filter{},
 	}
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
@@ -303,6 +304,17 @@ type selectSelf struct{}
 
 func (s *selectSelf) apply(e *Element, p *pather) {
 	p.candidates = append(p.candidates, e)
+}
+
+// selectRoot selects the element's root node.
+type selectRoot struct{}
+
+func (s *selectRoot) apply(e *Element, p *pather) {
+	root := e
+	for root.parent != nil {
+		root = root.parent
+	}
+	p.candidates = append(p.candidates, root)
 }
 
 // selectParent selects the element's parent into the candidate list.
