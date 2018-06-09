@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -779,6 +780,29 @@ func (e *Element) RemoveAttr(key string) *Attr {
 		}
 	}
 	return nil
+}
+
+// SortAttrs sorts the element's attributes lexicographically by key.
+func (e *Element) SortAttrs() {
+	sort.Sort(byAttr(e.Attr))
+}
+
+type byAttr []Attr
+
+func (a byAttr) Len() int {
+	return len(a)
+}
+
+func (a byAttr) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a byAttr) Less(i, j int) bool {
+	sp := strings.Compare(a[i].Space, a[j].Space)
+	if sp == 0 {
+		return strings.Compare(a[i].Key, a[j].Key) < 0
+	}
+	return sp < 0
 }
 
 var xmlReplacerNormal = strings.NewReplacer(

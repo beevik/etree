@@ -485,3 +485,17 @@ func TestSetRoot(t *testing.T) {
 	s5, _ := doc.WriteToString()
 	checkEq(t, s5, expected5)
 }
+
+func TestSortAttrs(t *testing.T) {
+	testdoc := `<el foo='5' Foo='2' aaa='4' สวัสดี='7' AAA='1' a01='3' z='6' a:ZZZ='9' a:AAA='8'/>`
+	doc := NewDocument()
+	err := doc.ReadFromString(testdoc)
+	if err != nil {
+		t.Fatal("etree ReadFromString: " + err.Error())
+	}
+
+	doc.Root().SortAttrs()
+	doc.Indent(2)
+	out, _ := doc.WriteToString()
+	checkEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
+}
