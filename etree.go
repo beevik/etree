@@ -307,10 +307,20 @@ func (e *Element) Text() string {
 	if len(e.Child) == 0 {
 		return ""
 	}
-	if cd, ok := e.Child[0].(*CharData); ok {
-		return cd.Data
+
+	text := ""
+	for _, ch := range e.Child {
+		if cd, ok := ch.(*CharData); ok {
+			if text == "" {
+				text = cd.Data
+			} else {
+				text = text + cd.Data
+			}
+		} else {
+			break
+		}
 	}
-	return ""
+	return text
 }
 
 // SetText replaces an element's subsidiary CharData text with a new string.

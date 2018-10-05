@@ -389,6 +389,32 @@ func TestInsertChild(t *testing.T) {
 	checkEq(t, s4, expected4)
 }
 
+func TestCdata(t *testing.T) {
+	var tests = []struct {
+		in, out string
+	}{
+		{`<tag>1234567</tag>`, "1234567"},
+		{`<tag><![CDATA[1234567]]></tag>`, "1234567"},
+		{`<tag>1<![CDATA[2]]>3<![CDATA[4]]>5<![CDATA[6]]>7</tag>`, "1234567"},
+		{`<tag>1<![CDATA[2]]>3<inner>4</inner>5<![CDATA[6]]>7</tag>`, "123"},
+		{`<tag>1<inner>4</inner>5<![CDATA[6]]>7</tag>`, "1"},
+		{`<tag><![CDATA[1]]><inner>4</inner>5<![CDATA[6]]>7</tag>`, "1"},
+	}
+
+	for _, test := range tests {
+		doc := NewDocument()
+		err := doc.ReadFromString(test.in)
+		if err != nil {
+			t.Fatal("etree ReadFromString: " + err.Error())
+		}
+
+		tag := doc.FindElement("tag")
+		if tag.Text() != test.out {
+			t.Fatalf("etree invalid cdata. Expected: %v. Got: %v\n", test.out, tag.Text())
+		}
+	}
+}
+
 func TestAddChild(t *testing.T) {
 	testdoc := `<book lang="en">
   <t:title>Great Expectations</t:title>
