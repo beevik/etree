@@ -171,7 +171,60 @@ func TestDocumentRead_Permissive(t *testing.T) {
 	}
 }
 
-func TestWriteSettings(t *testing.T) {
+func TestEscapeCodes(t *testing.T) {
+	cases := []struct {
+		input         string
+		normal        string
+		attrCanonical string
+		textCanonical string
+	}{
+		{
+			"&<>'\"\t\n\r",
+			"<e a=\"&amp;&lt;&gt;&apos;&quot;\t\n\r\">&amp;&lt;&gt;&apos;&quot;\t\n\r</e>",
+			"<e a=\"&amp;&lt;>'&quot;&#x9;&#xA;&#xD;\">&amp;&lt;&gt;&apos;&quot;\t\n\r</e>",
+			"<e a=\"&amp;&lt;&gt;&apos;&quot;\t\n\r\">&amp;&lt;&gt;'\"\t\n&#xD;</e>",
+		},
+		{
+			"\x00\x1f\x08\x09\x0a\x0d",
+			"<e a=\"���\t\n\r\">���\t\n\r</e>",
+			"<e a=\"���&#x9;&#xA;&#xD;\">���\t\n\r</e>",
+			"<e a=\"���\t\n\r\">���\t\n&#xD;</e>",
+		},
+	}
+	for _, c := range cases {
+		doc := NewDocument()
+
+		e := doc.CreateElement("e")
+		e.SetText(c.input)
+		e.CreateAttr("a", c.input)
+
+		doc.WriteSettings.CanonicalText = false
+		doc.WriteSettings.CanonicalAttrVal = false
+		s, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: Escape test produced inocrrect result.")
+		}
+		checkEq(t, s, c.normal)
+
+		doc.WriteSettings.CanonicalText = false
+		doc.WriteSettings.CanonicalAttrVal = true
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: Escape test produced inocrrect result.")
+		}
+		checkEq(t, s, c.attrCanonical)
+
+		doc.WriteSettings.CanonicalText = true
+		doc.WriteSettings.CanonicalAttrVal = false
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: Escape test produced inocrrect result.")
+		}
+		checkEq(t, s, c.textCanonical)
+	}
+}
+
+func TestCanonical(t *testing.T) {
 	BOM := "\xef\xbb\xbf"
 
 	doc := NewDocument()
@@ -186,7 +239,7 @@ func TestWriteSettings(t *testing.T) {
 
 	jon := people.CreateElement("Person")
 	jon.CreateAttr("name", "Jon O'Reilly")
-	jon.SetText("\r<'\">&")
+	jon.SetText("\r<'\">&\u0004\u0005\u001f�")
 
 	sally := people.CreateElement("Person")
 	sally.CreateAttr("name", "Sally")
@@ -201,7 +254,7 @@ func TestWriteSettings(t *testing.T) {
 	expected := BOM + `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
 <People>
   <!--These are all known people-->
-  <Person name="Jon O'Reilly">&#xD;&lt;'"&gt;&amp;</Person>
+  <Person name="Jon O'Reilly">&#xD;&lt;'"&gt;&amp;����</Person>
   <Person name="Sally" escape="&#xD;&#xA;&#x9;&lt;'&quot;>&amp;"></Person>
 </People>
 `

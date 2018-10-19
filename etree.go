@@ -815,30 +815,6 @@ func (a byAttr) Less(i, j int) bool {
 	return sp < 0
 }
 
-var xmlReplacerNormal = strings.NewReplacer(
-	"&", "&amp;",
-	"<", "&lt;",
-	">", "&gt;",
-	"'", "&apos;",
-	`"`, "&quot;",
-)
-
-var xmlReplacerCanonicalText = strings.NewReplacer(
-	"&", "&amp;",
-	"<", "&lt;",
-	">", "&gt;",
-	"\r", "&#xD;",
-)
-
-var xmlReplacerCanonicalAttrVal = strings.NewReplacer(
-	"&", "&amp;",
-	"<", "&lt;",
-	`"`, "&quot;",
-	"\t", "&#x9;",
-	"\n", "&#xA;",
-	"\r", "&#xD;",
-)
-
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	if a.Space != "" {
@@ -847,13 +823,13 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	}
 	w.WriteString(a.Key)
 	w.WriteString(`="`)
-	var r *strings.Replacer
+	var m escapeMode
 	if s.CanonicalAttrVal {
-		r = xmlReplacerCanonicalAttrVal
+		m = escapeCanonicalAttr
 	} else {
-		r = xmlReplacerNormal
+		m = escapeNormal
 	}
-	w.WriteString(r.Replace(a.Value))
+	escapeString(w, a.Value, m)
 	w.WriteByte('"')
 }
 
@@ -904,13 +880,13 @@ func (c *CharData) setParent(parent *Element) {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
-	var r *strings.Replacer
+	var m escapeMode
 	if s.CanonicalText {
-		r = xmlReplacerCanonicalText
+		m = escapeCanonicalText
 	} else {
-		r = xmlReplacerNormal
+		m = escapeNormal
 	}
-	w.WriteString(r.Replace(c.Data))
+	escapeString(w, c.Data, m)
 }
 
 // NewComment creates a parentless XML comment.

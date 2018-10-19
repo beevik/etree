@@ -5,8 +5,10 @@
 package etree
 
 import (
+	"bufio"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // A simple stack
@@ -185,4 +187,77 @@ func isInteger(s string) bool {
 		}
 	}
 	return true
+}
+
+type escapeMode byte
+
+const (
+	escapeNormal escapeMode = iota
+	escapeCanonicalText
+	escapeCanonicalAttr
+)
+
+// escapeString writes an escaped version of a string to the writer.
+func escapeString(w *bufio.Writer, s string, m escapeMode) {
+	var esc []byte
+	last := 0
+	for i := 0; i < len(s); {
+		r, width := utf8.DecodeRuneInString(s[i:])
+		i += width
+		switch r {
+		case '&':
+			esc = []byte("&amp;")
+		case '<':
+			esc = []byte("&lt;")
+		case '>':
+			if m == escapeCanonicalAttr {
+				continue
+			}
+			esc = []byte("&gt;")
+		case '\'':
+			if m != escapeNormal {
+				continue
+			}
+			esc = []byte("&apos;")
+		case '"':
+			if m == escapeCanonicalText {
+				continue
+			}
+			esc = []byte("&quot;")
+		case '\t':
+			if m != escapeCanonicalAttr {
+				continue
+			}
+			esc = []byte("&#x9;")
+		case '\n':
+			if m != escapeCanonicalAttr {
+				continue
+			}
+			esc = []byte("&#xA;")
+		case '\r':
+			if m == escapeNormal {
+				continue
+			}
+			esc = []byte("&#xD;")
+		default:
+			if !isInCharacterRange(r) || (r == 0xFFFD && width == 1) {
+				esc = []byte("\uFFFD")
+				break
+			}
+			continue
+		}
+		w.WriteString(s[last : i-width])
+		w.Write(esc)
+		last = i
+	}
+	w.WriteString(s[last:])
+}
+
+func isInCharacterRange(r rune) bool {
+	return r == 0x09 ||
+		r == 0x0A ||
+		r == 0x0D ||
+		r >= 0x20 && r <= 0xD7FF ||
+		r >= 0xE000 && r <= 0xFFFD ||
+		r >= 0x10000 && r <= 0x10FFFF
 }
