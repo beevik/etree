@@ -34,6 +34,9 @@ type ReadSettings struct {
 	// Permissive allows input containing common mistakes such as missing tags
 	// or attribute values. Default: false.
 	Permissive bool
+
+	// Entity to be passed to standard xml.Decoder. Default: nil.
+	Entity map[string]string
 }
 
 // newReadSettings creates a default ReadSettings record.
@@ -402,6 +405,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 	dec := xml.NewDecoder(r)
 	dec.CharsetReader = settings.CharsetReader
 	dec.Strict = !settings.Permissive
+	dec.Entity = settings.Entity
 	var stack stack
 	stack.push(e)
 	for {
