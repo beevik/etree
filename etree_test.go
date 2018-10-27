@@ -16,6 +16,39 @@ func checkEq(t *testing.T, got, want string) {
 	}
 }
 
+func TestCharAndTextElements(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	root.CreateCharData("This ")
+	root.CreateTextData("is ")
+	e1 := NewCharData("a ")
+	e2 := NewTextData("text ")
+	root.AddChild(e1)
+	root.AddChild(e2)
+	root.CreateCharData("Element!!")
+	doc.IndentTabs()
+
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	// Make sure the serialized XML matches expectation.
+	expected := `<root>This <![CDATA[is ]]>a <![CDATA[text ]]>Element!!</root>
+`
+	checkEq(t, s, expected)
+
+	// Check we can parse the output
+	err = doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+	if doc.Root().Text() != "This is a text Element!!" {
+		// The Golang XML decoder merges all the Text data into a single text
+		t.Error("etree: invalid structure")
+	}
+}
+
 func TestDocument(t *testing.T) {
 	// Create a document
 	doc := NewDocument()
@@ -33,6 +66,9 @@ func TestDocument(t *testing.T) {
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
 	author.CreateCharData("Charles Dickens")
+	review := book.CreateElement("review")
+	review.CreateTextData("<<< Will be replaced")
+	review.SetText(">>> Excellent book")
 	doc.IndentTabs()
 
 	// Serialize the document to a string
@@ -50,6 +86,7 @@ func TestDocument(t *testing.T) {
 	<book lang="en">
 		<t:title>Great Expectations</t:title>
 		<author>Charles Dickens</author>
+		<review><![CDATA[>>> Excellent book]]></review>
 	</book>
 </store>
 `
@@ -62,13 +99,16 @@ func TestDocument(t *testing.T) {
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
-	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
+	if len(book.ChildElements()) != 3 || len(book.Attr) != 1 || len(book.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(author.ChildElements()) != 0 || len(author.Child) != 1 || len(author.Attr) != 0 {
+		t.Error("etree: incorrect tree structure")
+	}
+	if len(review.ChildElements()) != 0 || len(review.Child) != 1 || len(review.Attr) != 0 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if book.parent != store || store.parent != &doc.Element || doc.parent != nil {
@@ -132,6 +172,10 @@ func TestDocument(t *testing.T) {
 	}
 	element = book.SelectElement("title")
 	if element != nil {
+		t.Error("etree: incorrect SelectElement result")
+	}
+	element = book.SelectElement("review")
+	if element != review || element.Text() != ">>> Excellent book" || len(element.Attr) != 0 {
 		t.Error("etree: incorrect SelectElement result")
 	}
 }

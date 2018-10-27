@@ -22,6 +22,12 @@ const (
 	NoIndent = -1
 )
 
+var (
+	cdataStart  = []byte("<![CDATA[")
+	cdataEnd    = []byte("]]>")
+	cdataEscape = []byte("]]]]><![CDATA[>")
+)
+
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
@@ -112,6 +118,7 @@ type Attr struct {
 // CharData represents character data within XML.
 type CharData struct {
 	Data       string
+	plain      bool
 	parent     *Element
 	whitespace bool
 }
@@ -339,7 +346,7 @@ func (e *Element) SetText(text string) {
 			return
 		}
 	}
-	cd := newCharData(text, false, e)
+	cd := newCharData(text, false, false, e)
 	copy(e.Child[1:], e.Child[0:])
 	e.Child[0] = cd
 }
@@ -432,7 +439,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			stack.pop()
 		case xml.CharData:
 			data := string(t)
-			newCharData(data, isWhitespace(data), top)
+			newCharData(data, isWhitespace(data), false, top)
 		case xml.Comment:
 			newComment(string(t), top)
 		case xml.Directive:
@@ -646,7 +653,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 		_, isCharData = c.(*CharData)
 		if !isCharData {
 			if !firstNonCharData || depth > 0 {
-				newCharData(indent(depth), true, e)
+				newCharData(indent(depth), true, false, e)
 			}
 			firstNonCharData = false
 		}
@@ -662,7 +669,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 	// Insert CR+indent before the last child.
 	if !isCharData {
 		if !firstNonCharData || depth > 0 {
-			newCharData(indent(depth-1), true, e)
+			newCharData(indent(depth-1), true, false, e)
 		}
 	}
 }
@@ -844,16 +851,23 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 
 // NewCharData creates a parentless XML character data entity.
 func NewCharData(data string) *CharData {
-	return newCharData(data, false, nil)
+	return newCharData(data, false, false, nil)
+}
+
+// NewTextData creates a parentless XML character data entity that will be encoded into
+// a CDATA.
+func NewTextData(data string) *CharData {
+	return newCharData(data, false, true, nil)
 }
 
 // newCharData creates an XML character data entity and binds it to a parent
 // element. If parent is nil, the CharData token remains unbound.
-func newCharData(data string, whitespace bool, parent *Element) *CharData {
+func newCharData(data string, whitespace bool, plain bool, parent *Element) *CharData {
 	c := &CharData{
 		Data:       data,
 		whitespace: whitespace,
 		parent:     parent,
+		plain:      plain,
 	}
 	if parent != nil {
 		parent.addChild(c)
@@ -864,7 +878,13 @@ func newCharData(data string, whitespace bool, parent *Element) *CharData {
 // CreateCharData creates an XML character data entity and adds it as a child
 // of element e.
 func (e *Element) CreateCharData(data string) *CharData {
-	return newCharData(data, false, e)
+	return newCharData(data, false, false, e)
+}
+
+// CreateTextData creates an XML character data entity that will be encoded into
+// a CDATA and adds it as a child of element e.
+func (e *Element) CreateTextData(data string) *CharData {
+	return newCharData(data, false, true, e)
 }
 
 // dup duplicates the character data.
@@ -889,13 +909,19 @@ func (c *CharData) setParent(parent *Element) {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
-	var m escapeMode
-	if s.CanonicalText {
-		m = escapeCanonicalText
+	if c.plain {
+		w.Write(cdataStart)
+		w.WriteString(c.Data)
+		w.Write(cdataEnd)
 	} else {
-		m = escapeNormal
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, c.Data, m)
 	}
-	escapeString(w, c.Data, m)
 }
 
 // NewComment creates a parentless XML comment.
