@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"encoding/xml"
 	"io"
 	"testing"
 )
@@ -164,6 +165,27 @@ func TestDocumentRead_Permissive(t *testing.T) {
 	}
 
 	doc.ReadSettings.Permissive = true
+	err = doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+}
+
+func TestDocumentRead_HTMLEntities(t *testing.T) {
+	s := `<store>
+	<book lang="en">
+		<title>&rarr;&nbsp;Great Expectations</title>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err == nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+
+	doc.ReadSettings.Entity = xml.HTMLEntity
 	err = doc.ReadFromString(s)
 	if err != nil {
 		t.Fatal("etree: incorrect ReadFromString result")
