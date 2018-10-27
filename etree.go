@@ -38,7 +38,12 @@ type ReadSettings struct {
 
 // newReadSettings creates a default ReadSettings record.
 func newReadSettings() ReadSettings {
-	return ReadSettings{}
+	return ReadSettings{
+		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
+			return input, nil
+		},
+		Permissive: false,
+	}
 }
 
 // WriteSettings allow for changing the serialization behavior of the WriteTo*

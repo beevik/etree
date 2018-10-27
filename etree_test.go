@@ -16,7 +16,6 @@ func checkEq(t *testing.T, got, want string) {
 }
 
 func TestDocument(t *testing.T) {
-
 	// Create a document
 	doc := NewDocument()
 	doc.CreateProcInst("xml", `version="1.0" encoding="UTF-8"`)
@@ -577,4 +576,19 @@ func TestSortAttrs(t *testing.T) {
 	doc.Indent(2)
 	out, _ := doc.WriteToString()
 	checkEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
+}
+
+func TestCharsetReaderEncoding(t *testing.T) {
+	cases := []string{
+		`<?xml version="1.0" encoding="ISO-8859-1"?><foo></foo>`,
+		`<?xml version="1.0" encoding="UTF-8"?><foo></foo>`,
+		`<?xml version="1.0" encoding="US-ASCII"?><foo></foo>`,
+	}
+
+	for _, c := range cases {
+		doc := NewDocument()
+		if err := doc.ReadFromBytes([]byte(c)); err != nil {
+			t.Error(err)
+		}
+	}
 }
