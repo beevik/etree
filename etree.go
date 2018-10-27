@@ -22,6 +22,12 @@ const (
 	NoIndent = -1
 )
 
+var (
+	cdataStart  = []byte("<![CDATA[")
+	cdataEnd    = []byte("]]>")
+	cdataEscape = []byte("]]]]><![CDATA[>")
+)
+
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
@@ -109,6 +115,7 @@ type Attr struct {
 // CharData represents character data within XML.
 type CharData struct {
 	Data       string
+	Cdata      bool
 	parent     *Element
 	whitespace bool
 }
@@ -885,13 +892,19 @@ func (c *CharData) setParent(parent *Element) {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
-	var m escapeMode
-	if s.CanonicalText {
-		m = escapeCanonicalText
+	if c.Cdata {
+		w.Write(cdataStart)
+		w.WriteString(c.Data)
+		w.Write(cdataEnd)
 	} else {
-		m = escapeNormal
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, c.Data, m)
 	}
-	escapeString(w, c.Data, m)
 }
 
 // NewComment creates a parentless XML comment.

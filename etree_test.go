@@ -32,6 +32,9 @@ func TestDocument(t *testing.T) {
 	title.SetText("Great Expectations")
 	author := book.CreateElement("author")
 	author.CreateCharData("Charles Dickens")
+	review := book.CreateElement("review")
+	review.CreateCharData("<<< Will be replaced").Cdata = true
+	review.SetText(">>> Excellent book")
 	doc.IndentTabs()
 
 	// Serialize the document to a string
@@ -49,6 +52,7 @@ func TestDocument(t *testing.T) {
 	<book lang="en">
 		<t:title>Great Expectations</t:title>
 		<author>Charles Dickens</author>
+		<review><![CDATA[>>> Excellent book]]></review>
 	</book>
 </store>
 `
@@ -61,13 +65,16 @@ func TestDocument(t *testing.T) {
 	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
-	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
+	if len(book.ChildElements()) != 3 || len(book.Attr) != 1 || len(book.Child) != 7 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(author.ChildElements()) != 0 || len(author.Child) != 1 || len(author.Attr) != 0 {
+		t.Error("etree: incorrect tree structure")
+	}
+	if len(review.ChildElements()) != 0 || len(review.Child) != 1 || len(review.Attr) != 0 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if book.parent != store || store.parent != &doc.Element || doc.parent != nil {
@@ -131,6 +138,10 @@ func TestDocument(t *testing.T) {
 	}
 	element = book.SelectElement("title")
 	if element != nil {
+		t.Error("etree: incorrect SelectElement result")
+	}
+	element = book.SelectElement("review")
+	if element != review || element.Text() != ">>> Excellent book" || len(element.Attr) != 0 {
 		t.Error("etree: incorrect SelectElement result")
 	}
 }
