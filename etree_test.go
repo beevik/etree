@@ -12,7 +12,7 @@ import (
 
 func checkEq(t *testing.T, got, want string) {
 	if got != want {
-		t.Errorf("etree: unexpected result.\nGot:\n%s\nWanted:\n%s\n", got, want)
+		t.Errorf("etree: unexpected result.\nGot:\n[%s]\nWanted:\n[%s]\n", got, want)
 	}
 }
 
@@ -51,18 +51,18 @@ func TestDocument(t *testing.T) {
 		<t:title>Great Expectations</t:title>
 		<author>Charles Dickens</author>
 	</book>
-</store>
-`
+</store>`
 	checkEq(t, s, expected)
 
 	// Test the structure of the XML
 	if doc.Root() != store {
 		t.Error("etree: root mismatch")
 	}
-	if len(store.ChildElements()) != 1 || len(store.Child) != 7 {
+	if len(store.ChildElements()) != 1 || len(store.Child) != 3 {
+		t.Logf("%d %d", len(store.ChildElements()), len(store.Child))
 		t.Error("etree: incorrect tree structure")
 	}
-	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 5 {
+	if len(book.ChildElements()) != 2 || len(book.Attr) != 1 || len(book.Child) != 2 {
 		t.Error("etree: incorrect tree structure")
 	}
 	if len(title.ChildElements()) != 0 || len(title.Child) != 1 || len(title.Attr) != 0 {
@@ -277,8 +277,7 @@ func TestCanonical(t *testing.T) {
   <!--These are all known people-->
   <Person name="Jon O'Reilly">&#xD;&lt;'"&gt;&amp;����</Person>
   <Person name="Sally" escape="&#xD;&#xA;&#x9;&lt;'&quot;>&amp;"></Person>
-</People>
-`
+</People>`
 	checkEq(t, s, expected)
 }
 
@@ -398,8 +397,7 @@ func TestInsertChild(t *testing.T) {
 	testdoc := `<book lang="en">
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
-</book>
-`
+</book>`
 
 	doc := NewDocument()
 	err := doc.ReadFromString(testdoc)
@@ -417,8 +415,7 @@ func TestInsertChild(t *testing.T) {
   <year>1861</year>
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
-</book>
-`
+</book>`
 	doc.Indent(2)
 	s1, _ := doc.WriteToString()
 	checkEq(t, s1, expected1)
@@ -430,8 +427,7 @@ func TestInsertChild(t *testing.T) {
   <t:title>Great Expectations</t:title>
   <year>1861</year>
   <author>Charles Dickens</author>
-</book>
-`
+</book>`
 	doc.Indent(2)
 	s2, _ := doc.WriteToString()
 	checkEq(t, s2, expected2)
@@ -443,8 +439,7 @@ func TestInsertChild(t *testing.T) {
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
   <year>1861</year>
-</book>
-`
+</book>`
 	doc.Indent(2)
 	s3, _ := doc.WriteToString()
 	checkEq(t, s3, expected3)
@@ -456,8 +451,7 @@ func TestInsertChild(t *testing.T) {
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
   <year>1861</year>
-</book>
-`
+</book>`
 	doc.Indent(2)
 	s4, _ := doc.WriteToString()
 	checkEq(t, s4, expected4)
@@ -493,8 +487,7 @@ func TestAddChild(t *testing.T) {
 	testdoc := `<book lang="en">
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
-</book>
-`
+</book>`
 	doc1 := NewDocument()
 	err := doc1.ReadFromString(testdoc)
 	if err != nil {
@@ -508,8 +501,7 @@ func TestAddChild(t *testing.T) {
 		root.AddChild(e)
 	}
 
-	expected1 := `<book lang="en"/>
-`
+	expected1 := `<book lang="en"/>`
 	doc1.Indent(2)
 	s1, _ := doc1.WriteToString()
 	checkEq(t, s1, expected1)
@@ -517,8 +509,7 @@ func TestAddChild(t *testing.T) {
 	expected2 := `<root>
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
-</root>
-`
+</root>`
 	doc2.Indent(2)
 	s2, _ := doc2.WriteToString()
 	checkEq(t, s2, expected2)
@@ -529,8 +520,7 @@ func TestSetRoot(t *testing.T) {
 <book>
   <title>Great Expectations</title>
   <author>Charles Dickens</author>
-</book>
-`
+</book>`
 	doc := NewDocument()
 	err := doc.ReadFromString(testdoc)
 	if err != nil {
@@ -553,8 +543,7 @@ func TestSetRoot(t *testing.T) {
 	}
 
 	expected1 := `<?test a="wow"?>
-<root/>
-`
+<root/>`
 	doc.Indent(2)
 	s1, _ := doc.WriteToString()
 	checkEq(t, s1, expected1)
@@ -579,8 +568,7 @@ func TestSetRoot(t *testing.T) {
 	s4, _ := doc2.WriteToString()
 	checkEq(t, s4, expected4)
 
-	expected5 := `<?test a="wow"?>
-`
+	expected5 := `<?test a="wow"?>`
 	doc.Indent(2)
 	s5, _ := doc.WriteToString()
 	checkEq(t, s5, expected5)
@@ -597,7 +585,7 @@ func TestSortAttrs(t *testing.T) {
 	doc.Root().SortAttrs()
 	doc.Indent(2)
 	out, _ := doc.WriteToString()
-	checkEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
+	checkEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`)
 }
 
 func TestCharsetReaderEncoding(t *testing.T) {

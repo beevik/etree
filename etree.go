@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -76,13 +77,17 @@ func newWriteSettings() WriteSettings {
 	}
 }
 
+type indentFunc func(depth int) string
+
 // A Token is an empty interface that represents an Element, CharData,
 // Comment, Directive, or ProcInst.
 type Token interface {
 	Parent() *Element
 	dup(parent *Element) Token
 	setParent(parent *Element)
-	writeTo(w *bufio.Writer, s *WriteSettings)
+	writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent indentFunc, align bool)
+	tail() string
+	setTail(data string)
 }
 
 // A Document is a container holding a complete XML hierarchy. Its embedded
@@ -93,6 +98,7 @@ type Document struct {
 	Element
 	ReadSettings  ReadSettings
 	WriteSettings WriteSettings
+	indent        indentFunc
 }
 
 // An Element represents an XML element, its attributes, and its child tokens.
@@ -100,6 +106,7 @@ type Element struct {
 	Space, Tag string   // namespace and tag
 	Attr       []Attr   // key-value attribute pairs
 	Child      []Token  // child tokens (elements, comments, etc.)
+	TailData   string   // mixed content xml support
 	parent     *Element // parent element
 }
 
@@ -118,21 +125,24 @@ type CharData struct {
 
 // A Comment represents an XML comment.
 type Comment struct {
-	Data   string
-	parent *Element
+	Data     string
+	TailData string // mixed content xml support
+	parent   *Element
 }
 
 // A Directive represents an XML directive.
 type Directive struct {
-	Data   string
-	parent *Element
+	Data     string
+	TailData string // mixed content xml support
+	parent   *Element
 }
 
 // A ProcInst represents an XML processing instruction.
 type ProcInst struct {
-	Target string
-	Inst   string
-	parent *Element
+	Target   string
+	Inst     string
+	TailData string // mixed content xml support
+	parent   *Element
 }
 
 // NewDocument creates an XML document without a root element.
@@ -141,12 +151,13 @@ func NewDocument() *Document {
 		Element{Child: make([]Token, 0)},
 		newReadSettings(),
 		newWriteSettings(),
+		nil,
 	}
 }
 
 // Copy returns a recursive, deep copy of the document.
 func (d *Document) Copy() *Document {
-	return &Document{*(d.dup(nil).(*Element)), d.ReadSettings, d.WriteSettings}
+	return &Document{*(d.dup(nil).(*Element)), d.ReadSettings, d.WriteSettings, d.indent}
 }
 
 // Root returns the root element of the document, or nil if there is no root
@@ -215,8 +226,14 @@ func (d *Document) ReadFromString(s string) error {
 func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 	cw := newCountWriter(w)
 	b := bufio.NewWriter(cw)
+	var nonCharData int
 	for _, c := range d.Child {
-		c.writeTo(b, &d.WriteSettings)
+		// do not align first level of nodes and never align CharData
+		_, isCharData := c.(*CharData)
+		if !isCharData {
+			nonCharData++
+		}
+		c.writeTo(b, &d.WriteSettings, 0, d.indent, !isCharData && nonCharData > 1)
 	}
 	err, n = b.Flush(), cw.bytes
 	return
@@ -253,29 +270,26 @@ func (d *Document) WriteToString() (s string, err error) {
 	return string(b), nil
 }
 
-type indentFunc func(depth int) string
-
 // Indent modifies the document's element tree by inserting CharData entities
 // containing carriage returns and indentation. The amount of indentation per
 // depth level is given as spaces. Pass etree.NoIndent for spaces if you want
 // no indentation at all.
 func (d *Document) Indent(spaces int) {
-	var indent indentFunc
 	switch {
 	case spaces < 0:
-		indent = func(depth int) string { return "" }
+		d.indent = func(depth int) string { return "" }
 	default:
-		indent = func(depth int) string { return crIndent(depth*spaces, crsp) }
+		d.indent = func(depth int) string { return crIndent(depth*spaces, crsp) }
 	}
-	d.Element.indent(0, indent)
+	d.removeBlanks()
 }
 
 // IndentTabs modifies the document's element tree by inserting CharData
 // entities containing carriage returns and tabs for indentation.  One tab is
 // used per indentation level.
 func (d *Document) IndentTabs() {
-	indent := func(depth int) string { return crIndent(depth, crtab) }
-	d.Element.indent(0, indent)
+	d.indent = func(depth int) string { return crIndent(depth, crtab) }
+	d.removeBlanks()
 }
 
 // NewElement creates an unparented element with the specified tag. The tag
@@ -332,16 +346,29 @@ func (e *Element) Text() string {
 }
 
 // SetText replaces an element's subsidiary CharData text with a new string.
-func (e *Element) SetText(text string) {
+func (e *Element) SetText(text string) *Element {
 	if len(e.Child) > 0 {
 		if cd, ok := e.Child[0].(*CharData); ok {
 			cd.Data = text
-			return
+			return e
 		}
 	}
 	cd := newCharData(text, false, e)
 	copy(e.Child[1:], e.Child[0:])
 	e.Child[0] = cd
+	return e
+}
+
+// Tail returns the characters immediately following the element's
+// closing tag (mixed content xml).
+func (e *Element) Tail() string {
+	return e.tail()
+}
+
+// SetTail replaces an element's tail text with a new string (mixed content xml).
+func (e *Element) SetTail(text string) *Element {
+	e.setTail(text)
+	return e
 }
 
 // CreateElement creates an element with the specified tag and adds it as the
@@ -361,6 +388,28 @@ func (e *Element) AddChild(t Token) {
 	}
 	t.setParent(e)
 	e.addChild(t)
+}
+
+// AddNext creates child element with attributes in a single call. Returns pointer to new element allowing for call chaining.
+func (e *Element) AddNext(tag string, attributes ...*Attr) *Element {
+	ch := e.CreateElement(tag)
+	for _, attr := range attributes {
+		if attr != nil && len(attr.Key) > 0 && len(attr.Value) > 0 {
+			ch.Attr = append(ch.Attr, *attr)
+		}
+	}
+	return ch
+}
+
+// AddSame creates child element with attributes in a single call. Returns pointer to parent element allowing for call chaining.
+func (e *Element) AddSame(tag string, attributes ...*Attr) *Element {
+	ch := e.CreateElement(tag)
+	for _, attr := range attributes {
+		if attr != nil && len(attr.Key) > 0 && len(attr.Value) > 0 {
+			ch.Attr = append(ch.Attr, *attr)
+		}
+	}
+	return e
 }
 
 // InsertChild inserts the token t before e's existing child token ex. If ex
@@ -406,7 +455,10 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 	dec.CharsetReader = settings.CharsetReader
 	dec.Strict = !settings.Permissive
 	dec.Entity = settings.Entity
-	var stack stack
+	var (
+		stack stack
+		prev  Token
+	)
 	stack.push(e)
 	for {
 		t, err := dec.RawToken()
@@ -428,17 +480,22 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
 			}
 			stack.push(e)
+			prev = nil
 		case xml.EndElement:
-			stack.pop()
+			prev = stack.pop().(Token)
 		case xml.CharData:
 			data := string(t)
-			newCharData(data, isWhitespace(data), top)
+			if prev == nil {
+				newCharData(data, isWhitespace(data), top)
+			} else {
+				prev.setTail(data)
+			}
 		case xml.Comment:
-			newComment(string(t), top)
+			prev = interface{}(newComment(string(t), top)).(Token)
 		case xml.Directive:
-			newDirective(string(t), top)
+			prev = interface{}(newDirective(string(t), top)).(Token)
 		case xml.ProcInst:
-			newProcInst(t.Target, string(t.Inst), top)
+			prev = interface{}(newProcInst(t.Target, string(t.Inst), top)).(Token)
 		}
 	}
 }
@@ -626,48 +683,26 @@ func (e *Element) GetRelativePath(source *Element) string {
 	return strings.Join(parts, "/")
 }
 
-// indent recursively inserts proper indentation between an
-// XML element's child tokens.
-func (e *Element) indent(depth int, indent indentFunc) {
+// removeBlanks recursively cleans indentation between an XML element's child tokens.
+// This is analogous to python lxml "remove blanks" document parsing.
+func (e *Element) removeBlanks() {
+
+	// remove indenting CharData
 	e.stripIndent()
-	n := len(e.Child)
-	if n == 0 {
-		return
-	}
 
-	oldChild := e.Child
-	e.Child = make([]Token, 0, n*2+1)
-	isCharData, firstNonCharData := false, true
-	for _, c := range oldChild {
-
-		// Insert CR+indent before child if it's not character data.
-		// Exceptions: when it's the first non-character-data child, or when
-		// the child is at root depth.
-		_, isCharData = c.(*CharData)
-		if !isCharData {
-			if !firstNonCharData || depth > 0 {
-				newCharData(indent(depth), true, e)
-			}
-			firstNonCharData = false
+	// cut indenting tails if possible and do recursion on what's left
+	for i := 0; i < len(e.Child); i++ {
+		t := e.Child[i].tail()
+		if len(t) > 0 && isWhitespace(t) {
+			e.Child[i].setTail("")
 		}
-
-		e.addChild(c)
-
-		// Recursively process child elements.
-		if ce, ok := c.(*Element); ok {
-			ce.indent(depth+1, indent)
-		}
-	}
-
-	// Insert CR+indent before the last child.
-	if !isCharData {
-		if !firstNonCharData || depth > 0 {
-			newCharData(indent(depth-1), true, e)
+		if ce, ok := e.Child[i].(*Element); ok {
+			ce.removeBlanks()
 		}
 	}
 }
 
-// stripIndent removes any previously inserted indentation.
+// stripIndent removes any CharData which looks like indentation.
 func (e *Element) stripIndent() {
 	// Count the number of non-indent child tokens
 	n := len(e.Child)
@@ -696,11 +731,12 @@ func (e *Element) stripIndent() {
 // dup duplicates the element.
 func (e *Element) dup(parent *Element) Token {
 	ne := &Element{
-		Space:  e.Space,
-		Tag:    e.Tag,
-		Attr:   make([]Attr, len(e.Attr)),
-		Child:  make([]Token, len(e.Child)),
-		parent: parent,
+		Space:    e.Space,
+		Tag:      e.Tag,
+		Attr:     make([]Attr, len(e.Attr)),
+		Child:    make([]Token, len(e.Child)),
+		TailData: e.TailData,
+		parent:   parent,
 	}
 	for i, t := range e.Child {
 		ne.Child[i] = t.dup(ne)
@@ -709,6 +745,16 @@ func (e *Element) dup(parent *Element) Token {
 		ne.Attr[i] = a
 	}
 	return ne
+}
+
+// setTail sets Token tail
+func (e *Element) setTail(data string) {
+	e.TailData = data
+}
+
+// tail gets Token tail
+func (e *Element) tail() string {
+	return e.TailData
 }
 
 // Parent returns the element token's parent element, or nil if it has no
@@ -723,7 +769,10 @@ func (e *Element) setParent(parent *Element) {
 }
 
 // writeTo serializes the element to the writer w.
-func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
+func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent indentFunc, align bool) {
+	if align && depth >= 0 && indent != nil {
+		w.WriteString(indent(depth))
+	}
 	w.WriteByte('<')
 	if e.Space != "" {
 		w.WriteString(e.Space)
@@ -735,9 +784,19 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 		a.writeTo(w, s)
 	}
 	if len(e.Child) > 0 {
-		w.WriteString(">")
+		w.WriteByte('>')
+		haveNonCharacterNodes, prevNodeHasTail, prevNodeWasText := false, false, false
 		for _, c := range e.Child {
-			c.writeTo(w, s)
+			_, isCharData := c.(*CharData)
+			if !isCharData {
+				haveNonCharacterNodes = true
+			}
+			c.writeTo(w, s, depth+1, indent, !prevNodeHasTail && !prevNodeWasText)
+			prevNodeHasTail = len(c.tail()) > 0 && !isWhitespace(c.tail())
+			prevNodeWasText = isCharData
+		}
+		if haveNonCharacterNodes && !prevNodeHasTail && depth >= 0 && indent != nil {
+			w.WriteString(indent(depth))
 		}
 		w.Write([]byte{'<', '/'})
 		if e.Space != "" {
@@ -759,11 +818,20 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 			w.Write([]byte{'/', '>'})
 		}
 	}
+	if len(e.TailData) > 0 {
+		w.WriteString(e.TailData)
+	}
 }
 
 // addChild adds a child token to the element e.
 func (e *Element) addChild(t Token) {
 	e.Child = append(e.Child, t)
+}
+
+// NewAttr return pointer to newly created attribute struct.
+func NewAttr(key, value string) *Attr {
+	space, skey := spaceDecompose(key)
+	return &Attr{space, skey, value}
 }
 
 // CreateAttr creates an attribute and adds it to element e. The key may be
@@ -876,6 +944,21 @@ func (c *CharData) dup(parent *Element) Token {
 	}
 }
 
+// setIndent stores values necessary to properly indent output if requested.
+func (c *CharData) setIndent(_ int, _ indentFunc) {
+	// do nothing - noop
+}
+
+// setTail sets Token tail
+func (c *CharData) setTail(data string) {
+	// do nothing - noop
+}
+
+// tail gets Token tail
+func (c *CharData) tail() string {
+	return ""
+}
+
 // Parent returns the character data token's parent element, or nil if it has
 // no parent.
 func (c *CharData) Parent() *Element {
@@ -888,7 +971,7 @@ func (c *CharData) setParent(parent *Element) {
 }
 
 // writeTo serializes the character data entity to the writer.
-func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
+func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings, _ int, _ indentFunc, _ bool) {
 	var m escapeMode
 	if s.CanonicalText {
 		m = escapeCanonicalText
@@ -924,9 +1007,20 @@ func (e *Element) CreateComment(comment string) *Comment {
 // dup duplicates the comment.
 func (c *Comment) dup(parent *Element) Token {
 	return &Comment{
-		Data:   c.Data,
-		parent: parent,
+		Data:     c.Data,
+		TailData: c.TailData,
+		parent:   parent,
 	}
+}
+
+// setTail sets Token tail
+func (c *Comment) setTail(data string) {
+	c.TailData = data
+}
+
+// tail gets Token tail
+func (c *Comment) tail() string {
+	return c.TailData
 }
 
 // Parent returns comment token's parent element, or nil if it has no parent.
@@ -940,10 +1034,16 @@ func (c *Comment) setParent(parent *Element) {
 }
 
 // writeTo serialies the comment to the writer.
-func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings) {
+func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent indentFunc, align bool) {
+	if align && depth >= 0 && indent != nil {
+		w.WriteString(indent(depth))
+	}
 	w.WriteString("<!--")
 	w.WriteString(c.Data)
 	w.WriteString("-->")
+	if c.TailData != "" {
+		w.WriteString(c.TailData)
+	}
 }
 
 // NewDirective creates a parentless XML directive.
@@ -973,9 +1073,20 @@ func (e *Element) CreateDirective(data string) *Directive {
 // dup duplicates the directive.
 func (d *Directive) dup(parent *Element) Token {
 	return &Directive{
-		Data:   d.Data,
-		parent: parent,
+		Data:     d.Data,
+		TailData: d.TailData,
+		parent:   parent,
 	}
+}
+
+// setTail sets Token tail
+func (d *Directive) setTail(data string) {
+	d.TailData = data
+}
+
+// tail gets Token tail
+func (d *Directive) tail() string {
+	return d.TailData
 }
 
 // Parent returns directive token's parent element, or nil if it has no
@@ -990,10 +1101,16 @@ func (d *Directive) setParent(parent *Element) {
 }
 
 // writeTo serializes the XML directive to the writer.
-func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings) {
+func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent indentFunc, align bool) {
+	if align && depth >= 0 && indent != nil {
+		w.WriteString(indent(depth))
+	}
 	w.WriteString("<!")
 	w.WriteString(d.Data)
 	w.WriteString(">")
+	if d.TailData != "" {
+		w.WriteString(d.TailData)
+	}
 }
 
 // NewProcInst creates a parentless XML processing instruction.
@@ -1024,10 +1141,21 @@ func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 // dup duplicates the procinst.
 func (p *ProcInst) dup(parent *Element) Token {
 	return &ProcInst{
-		Target: p.Target,
-		Inst:   p.Inst,
-		parent: parent,
+		Target:   p.Target,
+		Inst:     p.Inst,
+		TailData: p.TailData,
+		parent:   parent,
 	}
+}
+
+// setTail sets Token tail
+func (p *ProcInst) setTail(data string) {
+	p.TailData = data
+}
+
+// tail gets Token tail
+func (p *ProcInst) tail() string {
+	return p.TailData
 }
 
 // Parent returns processing instruction token's parent element, or nil if it
@@ -1041,13 +1169,22 @@ func (p *ProcInst) setParent(parent *Element) {
 	p.parent = parent
 }
 
+var reEnc = regexp.MustCompile(`encoding=".+"`)
+
 // writeTo serializes the processing instruction to the writer.
-func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings) {
+func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent indentFunc, align bool) {
+	if align && depth >= 0 && indent != nil {
+		w.WriteString(indent(depth))
+	}
 	w.WriteString("<?")
 	w.WriteString(p.Target)
 	if p.Inst != "" {
 		w.WriteByte(' ')
-		w.WriteString(p.Inst)
+		// This is go - output encoding always UTF-8
+		w.WriteString(reEnc.ReplaceAllLiteralString(p.Inst, `encoding="UTF-8"`))
 	}
 	w.WriteString("?>")
+	if p.TailData != "" {
+		w.WriteString(p.TailData)
+	}
 }
