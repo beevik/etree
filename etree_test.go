@@ -614,3 +614,47 @@ func TestCharsetReaderEncoding(t *testing.T) {
 		}
 	}
 }
+
+func TestNamespace(t *testing.T) {
+	testdoc := `
+<N:root xmlns:N="name">
+    <N:key>value1</N:key>
+    <N:root2 xmlns:N="name2">
+        <N:key2>value2</N:key2>
+    </N:root2>
+    <N:key3 N:v="1">value1</N:key3>
+    <root3 xmlns="name3">
+    </root3>
+</N:root>
+`
+	doc := NewDocument()
+	err := doc.ReadFromString(testdoc)
+	if err != nil {
+		t.Fatal("etree ReadFromString: " + err.Error())
+	}
+
+	root := doc.ChildElements()[0]
+	checkEq(t, root.Tag, "root")
+	checkEq(t, root.FullSpace, "name")
+
+	key := root.ChildElements()[0]
+	checkEq(t, key.Tag, "key")
+	checkEq(t, key.FullSpace, "name")
+
+	root2 := root.ChildElements()[1]
+	checkEq(t, root2.Tag, "root2")
+	checkEq(t, root2.FullSpace, "name2")
+
+	key2 := root2.ChildElements()[0]
+	checkEq(t, key2.Tag, "key2")
+	checkEq(t, key2.FullSpace, "name2")
+
+	key3 := root.ChildElements()[2]
+	checkEq(t, key3.Tag, "key3")
+	checkEq(t, key3.FullSpace, "name")
+	checkEq(t, key3.Attr[0].FullSpace, "name")
+
+	root3 := root.ChildElements()[3]
+	checkEq(t, root3.Tag, "root3")
+	checkEq(t, root3.FullSpace, "name3")
+}

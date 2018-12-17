@@ -98,6 +98,7 @@ type Document struct {
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
 	Space, Tag string   // namespace and tag
+	FullSpace  string   // full namespace value
 	Attr       []Attr   // key-value attribute pairs
 	Child      []Token  // child tokens (elements, comments, etc.)
 	parent     *Element // parent element
@@ -106,6 +107,7 @@ type Element struct {
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
 	Space, Key string // The attribute's namespace and key
+	FullSpace  string // full namespace value
 	Value      string // The attribute value string
 }
 
@@ -298,6 +300,7 @@ func newElement(space, tag string, parent *Element) *Element {
 	if parent != nil {
 		parent.addChild(e)
 	}
+	e.ResolveFullSpace()
 	return e
 }
 
@@ -398,6 +401,41 @@ func (e *Element) RemoveChild(t Token) Token {
 	return nil
 }
 
+// ResolveFullSpace resolves the full namespace of an element and
+// its attributes by looking in itself and parents xmlns declarations.
+// Manual invocation of this function is necessary to keep FullSpace
+// up to date after an ancestor's xmlns is modified
+func (e *Element) ResolveFullSpace() {
+	e.FullSpace = e.resolveFullSpace(e.Space)
+
+	for i := range e.Attr {
+		e.Attr[i].FullSpace = e.resolveFullSpace(e.Attr[i].Space)
+	}
+}
+
+// resolveFullSpace is a helper function to query the full space
+func (e *Element) resolveFullSpace(space string) string {
+	var xmlnsDeclaration string
+	if space == "" {
+		xmlnsDeclaration = "{}xmlns"
+	} else {
+		xmlnsDeclaration = "xmlns:" + space
+	}
+
+	p := e
+	var attr *Attr
+	for p != nil && attr == nil {
+		attr = p.SelectAttr(xmlnsDeclaration)
+		p = p.parent
+	}
+
+	if attr == nil {
+		return space
+	} else {
+		return attr.Value
+	}
+}
+
 // ReadFrom reads XML from the reader r and stores the result as a new child
 // of element e.
 func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err error) {
@@ -427,6 +465,8 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			for _, a := range t.Attr {
 				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
 			}
+			e.ResolveFullSpace()
+
 			stack.push(e)
 		case xml.EndElement:
 			stack.pop()
@@ -449,7 +489,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 func (e *Element) SelectAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
-		if spaceMatch(space, a.Space) && skey == a.Key {
+		if (spaceMatch(space, a.Space) || spaceMatch(space, a.FullSpace)) && skey == a.Key {
 			return &e.Attr[i]
 		}
 	}
@@ -462,7 +502,7 @@ func (e *Element) SelectAttr(key string) *Attr {
 func (e *Element) SelectAttrValue(key, dflt string) string {
 	space, skey := spaceDecompose(key)
 	for _, a := range e.Attr {
-		if spaceMatch(space, a.Space) && skey == a.Key {
+		if (spaceMatch(space, a.Space) || spaceMatch(space, a.FullSpace)) && skey == a.Key {
 			return a.Value
 		}
 	}
@@ -486,7 +526,7 @@ func (e *Element) ChildElements() []*Element {
 func (e *Element) SelectElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	for _, t := range e.Child {
-		if c, ok := t.(*Element); ok && spaceMatch(space, c.Space) && stag == c.Tag {
+		if c, ok := t.(*Element); ok && (spaceMatch(space, c.Space) || spaceMatch(space, c.FullSpace)) && stag == c.Tag {
 			return c
 		}
 	}
@@ -499,7 +539,7 @@ func (e *Element) SelectElements(tag string) []*Element {
 	space, stag := spaceDecompose(tag)
 	var elements []*Element
 	for _, t := range e.Child {
-		if c, ok := t.(*Element); ok && spaceMatch(space, c.Space) && stag == c.Tag {
+		if c, ok := t.(*Element); ok && (spaceMatch(space, c.Space) || spaceMatch(space, c.FullSpace)) && stag == c.Tag {
 			elements = append(elements, c)
 		}
 	}
@@ -782,7 +822,7 @@ func (e *Element) createAttr(space, key, value string) *Attr {
 			return &e.Attr[i]
 		}
 	}
-	a := Attr{space, key, value}
+	a := Attr{space, key, "", value}
 	e.Attr = append(e.Attr, a)
 	return &e.Attr[len(e.Attr)-1]
 }

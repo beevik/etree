@@ -140,13 +140,18 @@ func spaceMatch(a, b string) bool {
 }
 
 // spaceDecompose breaks a namespace:tag identifier at the ':'
-// and returns the two parts.
+// or {namespace}tag identifier and returns the two parts.
 func spaceDecompose(str string) (space, key string) {
-	colon := strings.IndexByte(str, ':')
-	if colon == -1 {
-		return "", str
+	if str[0] == '{' {
+		rB := strings.IndexByte(str, '}')
+		return str[1:rB], str[rB+1:]
+	} else {
+		colon := strings.IndexByte(str, ':')
+		if colon == -1 {
+			return "", str
+		}
+		return str[:colon], str[colon+1:]
 	}
-	return str[:colon], str[colon+1:]
 }
 
 // Strings used by crIndent

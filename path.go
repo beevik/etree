@@ -373,7 +373,7 @@ func newSelectChildrenByTag(path string) *selectChildrenByTag {
 
 func (s *selectChildrenByTag) apply(e *Element, p *pather) {
 	for _, c := range e.Child {
-		if c, ok := c.(*Element); ok && spaceMatch(s.space, c.Space) && s.tag == c.Tag {
+		if c, ok := c.(*Element); ok && (spaceMatch(s.space, c.Space) || spaceMatch(s.space, c.FullSpace)) && s.tag == c.Tag {
 			p.candidates = append(p.candidates, c)
 		}
 	}
@@ -416,7 +416,7 @@ func newFilterAttr(str string) *filterAttr {
 func (f *filterAttr) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, a := range c.Attr {
-			if spaceMatch(f.space, a.Space) && f.key == a.Key {
+			if (spaceMatch(f.space, a.Space) || spaceMatch(f.space, a.FullSpace)) && f.key == a.Key {
 				p.scratch = append(p.scratch, c)
 				break
 			}
@@ -439,7 +439,7 @@ func newFilterAttrVal(str, value string) *filterAttrVal {
 func (f *filterAttrVal) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, a := range c.Attr {
-			if spaceMatch(f.space, a.Space) && f.key == a.Key && f.val == a.Value {
+			if (spaceMatch(f.space, a.Space) || spaceMatch(f.space, a.FullSpace)) && f.key == a.Key && f.val == a.Value {
 				p.scratch = append(p.scratch, c)
 				break
 			}
@@ -498,7 +498,7 @@ func (f *filterChild) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
-				spaceMatch(f.space, cc.Space) &&
+				(spaceMatch(f.space, cc.Space) || spaceMatch(f.space, cc.FullSpace)) &&
 				f.tag == cc.Tag {
 				p.scratch = append(p.scratch, c)
 			}
@@ -522,7 +522,7 @@ func (f *filterChildText) apply(p *pather) {
 	for _, c := range p.candidates {
 		for _, cc := range c.Child {
 			if cc, ok := cc.(*Element); ok &&
-				spaceMatch(f.space, cc.Space) &&
+				(spaceMatch(f.space, cc.Space) || spaceMatch(f.space, cc.FullSpace)) &&
 				f.tag == cc.Tag &&
 				f.text == cc.Text() {
 				p.scratch = append(p.scratch, c)
