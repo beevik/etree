@@ -819,7 +819,13 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent i
 		}
 	}
 	if len(e.TailData) > 0 {
-		w.WriteString(e.TailData)
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, e.TailData, m)
 	}
 }
 
@@ -1041,8 +1047,14 @@ func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent i
 	w.WriteString("<!--")
 	w.WriteString(c.Data)
 	w.WriteString("-->")
-	if c.TailData != "" {
-		w.WriteString(c.TailData)
+	if len(c.TailData) > 0 {
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, c.TailData, m)
 	}
 }
 
@@ -1108,8 +1120,14 @@ func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent
 	w.WriteString("<!")
 	w.WriteString(d.Data)
 	w.WriteString(">")
-	if d.TailData != "" {
-		w.WriteString(d.TailData)
+	if len(d.TailData) > 0 {
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, d.TailData, m)
 	}
 }
 
@@ -1184,7 +1202,13 @@ func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings, depth int, indent 
 		w.WriteString(reEnc.ReplaceAllLiteralString(p.Inst, `encoding="UTF-8"`))
 	}
 	w.WriteString("?>")
-	if p.TailData != "" {
-		w.WriteString(p.TailData)
+	if len(p.TailData) > 0 {
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, p.TailData, m)
 	}
 }
