@@ -22,12 +22,6 @@ const (
 	NoIndent = -1
 )
 
-var (
-	cdataStart  = []byte("<![CDATA[")
-	cdataEnd    = []byte("]]>")
-	cdataEscape = []byte("]]]]><![CDATA[>")
-)
-
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
@@ -115,12 +109,23 @@ type Attr struct {
 	Value      string // The attribute value string
 }
 
-// CharData represents character data within XML.
+// charDataFlags are used with CharData tokens to store additional settings.
+type charDataFlags uint8
+
+const (
+	// The CharData was created as whitespace.
+	whitespaceFlag charDataFlags = 1 << iota
+
+	// The CharData contains a CDATA section.
+	cdataFlag
+)
+
+// CharData can be used to represent a character data entity or CDATA section
+// within an XML document.
 type CharData struct {
-	Data       string
-	plain      bool
-	parent     *Element
-	whitespace bool
+	Data   string
+	parent *Element
+	flags  charDataFlags
 }
 
 // A Comment represents an XML comment.
@@ -316,8 +321,8 @@ func (e *Element) Copy() *Element {
 	return e.dup(parent).(*Element)
 }
 
-// Text returns the characters immediately following the element's
-// opening tag.
+// Text returns the characters immediately following the element's opening
+// tag.
 func (e *Element) Text() string {
 	if len(e.Child) == 0 {
 		return ""
@@ -340,13 +345,24 @@ func (e *Element) Text() string {
 
 // SetText replaces an element's subsidiary CharData text with a new string.
 func (e *Element) SetText(text string) {
+	e.setCharData(text, 0)
+}
+
+// SetCData replaces an element's subsidiary CharData text with a new string
+// encoded into a CDATA section.
+func (e *Element) SetCData(text string) {
+	e.setCharData(text, cdataFlag)
+}
+
+// setCharData is a helper function used by SetText and SetCData.
+func (e *Element) setCharData(text string, flags charDataFlags) {
 	if len(e.Child) > 0 {
 		if cd, ok := e.Child[0].(*CharData); ok {
-			cd.Data = text
+			cd.Data, cd.flags = text, flags
 			return
 		}
 	}
-	cd := newCharData(text, false, false, e)
+	cd := newCharData(text, flags, e)
 	copy(e.Child[1:], e.Child[0:])
 	e.Child[0] = cd
 }
@@ -439,7 +455,11 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			stack.pop()
 		case xml.CharData:
 			data := string(t)
-			newCharData(data, isWhitespace(data), false, top)
+			var flags charDataFlags
+			if isWhitespace(data) {
+				flags = whitespaceFlag
+			}
+			newCharData(data, flags, top)
 		case xml.Comment:
 			newComment(string(t), top)
 		case xml.Directive:
@@ -653,7 +673,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 		_, isCharData = c.(*CharData)
 		if !isCharData {
 			if !firstNonCharData || depth > 0 {
-				newCharData(indent(depth), true, false, e)
+				newCharData(indent(depth), whitespaceFlag, e)
 			}
 			firstNonCharData = false
 		}
@@ -669,7 +689,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 	// Insert CR+indent before the last child.
 	if !isCharData {
 		if !firstNonCharData || depth > 0 {
-			newCharData(indent(depth-1), true, false, e)
+			newCharData(indent(depth-1), whitespaceFlag, e)
 		}
 	}
 }
@@ -679,7 +699,7 @@ func (e *Element) stripIndent() {
 	// Count the number of non-indent child tokens
 	n := len(e.Child)
 	for _, c := range e.Child {
-		if cd, ok := c.(*CharData); ok && cd.whitespace {
+		if cd, ok := c.(*CharData); ok && cd.IsWhitespace() {
 			n--
 		}
 	}
@@ -691,7 +711,7 @@ func (e *Element) stripIndent() {
 	newChild := make([]Token, n)
 	j := 0
 	for _, c := range e.Child {
-		if cd, ok := c.(*CharData); ok && cd.whitespace {
+		if cd, ok := c.(*CharData); ok && cd.IsWhitespace() {
 			continue
 		}
 		newChild[j] = c
@@ -849,25 +869,33 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteByte('"')
 }
 
-// NewCharData creates a parentless XML character data entity.
-func NewCharData(data string) *CharData {
-	return newCharData(data, false, false, nil)
+// NewText creates a parentless CharData token containing an XML character
+// data entity.
+func NewText(text string) *CharData {
+	return newCharData(text, 0, nil)
 }
 
-// NewTextData creates a parentless XML character data entity that will be encoded into
-// a CDATA.
-func NewTextData(data string) *CharData {
-	return newCharData(data, false, true, nil)
+// NewCData creates a parentless XML character CDATA section.
+func NewCData(data string) *CharData {
+	return newCharData(data, cdataFlag, nil)
+}
+
+// NewCharData creates a parentless CharData token containing an XML character
+// data entity.
+//
+// Deprecated: NewCharData is deprecated. Use NewText, which does the same
+// thing, instead.
+func NewCharData(data string) *CharData {
+	return newCharData(data, 0, nil)
 }
 
 // newCharData creates an XML character data entity and binds it to a parent
 // element. If parent is nil, the CharData token remains unbound.
-func newCharData(data string, whitespace bool, plain bool, parent *Element) *CharData {
+func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	c := &CharData{
-		Data:       data,
-		whitespace: whitespace,
-		parent:     parent,
-		plain:      plain,
+		Data:   data,
+		parent: parent,
+		flags:  flags,
 	}
 	if parent != nil {
 		parent.addChild(c)
@@ -875,25 +903,37 @@ func newCharData(data string, whitespace bool, plain bool, parent *Element) *Cha
 	return c
 }
 
-// CreateCharData creates an XML character data entity and adds it as a child
-// of element e.
+// CreateCharData creates a CharData token containing an XML character data
+// entity and adds it as a child of element e.
 func (e *Element) CreateCharData(data string) *CharData {
-	return newCharData(data, false, false, e)
+	return newCharData(data, 0, e)
 }
 
-// CreateTextData creates an XML character data entity that will be encoded into
-// a CDATA and adds it as a child of element e.
-func (e *Element) CreateTextData(data string) *CharData {
-	return newCharData(data, false, true, e)
+// CreateCData creates a CharData token containing a CDATA section and adds it
+// as a child of element e.
+func (e *Element) CreateCData(data string) *CharData {
+	return newCharData(data, cdataFlag, e)
 }
 
 // dup duplicates the character data.
 func (c *CharData) dup(parent *Element) Token {
 	return &CharData{
-		Data:       c.Data,
-		whitespace: c.whitespace,
-		parent:     parent,
+		Data:   c.Data,
+		flags:  c.flags,
+		parent: parent,
 	}
+}
+
+// IsWhitespace returns true if the character data token was created to
+// contain only whitespace.
+func (c *CharData) IsWhitespace() bool {
+	return (c.flags & whitespaceFlag) != 0
+}
+
+// IsCData returns true if the character data token is to be encoded as a
+// CDATA section.
+func (c *CharData) IsCData() bool {
+	return (c.flags & cdataFlag) != 0
 }
 
 // Parent returns the character data token's parent element, or nil if it has
@@ -909,10 +949,10 @@ func (c *CharData) setParent(parent *Element) {
 
 // writeTo serializes the character data entity to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
-	if c.plain {
-		w.Write(cdataStart)
+	if c.IsCData() {
+		w.WriteString(`<![CDATA[`)
 		w.WriteString(c.Data)
-		w.Write(cdataEnd)
+		w.WriteString(`]]>`)
 	} else {
 		var m escapeMode
 		if s.CanonicalText {

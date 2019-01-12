@@ -16,39 +16,6 @@ func checkEq(t *testing.T, got, want string) {
 	}
 }
 
-func TestCharAndTextElements(t *testing.T) {
-	doc := NewDocument()
-	root := doc.CreateElement("root")
-	root.CreateCharData("This ")
-	root.CreateTextData("is ")
-	e1 := NewCharData("a ")
-	e2 := NewTextData("text ")
-	root.AddChild(e1)
-	root.AddChild(e2)
-	root.CreateCharData("Element!!")
-	doc.IndentTabs()
-
-	s, err := doc.WriteToString()
-	if err != nil {
-		t.Error("etree: failed to serialize document")
-	}
-
-	// Make sure the serialized XML matches expectation.
-	expected := `<root>This <![CDATA[is ]]>a <![CDATA[text ]]>Element!!</root>
-`
-	checkEq(t, s, expected)
-
-	// Check we can parse the output
-	err = doc.ReadFromString(s)
-	if err != nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
-	if doc.Root().Text() != "This is a text Element!!" {
-		// The Golang XML decoder merges all the Text data into a single text
-		t.Error("etree: invalid structure")
-	}
-}
-
 func TestDocument(t *testing.T) {
 	// Create a document
 	doc := NewDocument()
@@ -67,8 +34,8 @@ func TestDocument(t *testing.T) {
 	author := book.CreateElement("author")
 	author.CreateCharData("Charles Dickens")
 	review := book.CreateElement("review")
-	review.CreateTextData("<<< Will be replaced")
-	review.SetText(">>> Excellent book")
+	review.CreateCData("<<< Will be replaced")
+	review.SetCData(">>> Excellent book")
 	doc.IndentTabs()
 
 	// Serialize the document to a string
@@ -656,5 +623,33 @@ func TestCharsetReaderEncoding(t *testing.T) {
 		if err := doc.ReadFromBytes([]byte(c)); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+func TestCharData(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	root.CreateCharData("This ")
+	root.CreateCData("is ")
+	e1 := NewText("a ")
+	e2 := NewCData("text ")
+	root.AddChild(e1)
+	root.AddChild(e2)
+	root.CreateCharData("Element!!")
+
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, `<root>This <![CDATA[is ]]>a <![CDATA[text ]]>Element!!</root>`)
+
+	// Check we can parse the output
+	err = doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+	if doc.Root().Text() != "This is a text Element!!" {
+		t.Error("etree: invalid text")
 	}
 }
