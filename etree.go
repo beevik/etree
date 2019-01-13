@@ -120,8 +120,8 @@ const (
 	cdataFlag
 )
 
-// CharData can be used to represent a character data entity or CDATA section
-// within an XML document.
+// CharData can be used to represent character data or a CDATA section within
+// an XML document.
 type CharData struct {
 	Data   string
 	parent *Element
@@ -267,10 +267,10 @@ func (d *Document) WriteToString() (s string, err error) {
 
 type indentFunc func(depth int) string
 
-// Indent modifies the document's element tree by inserting CharData entities
-// containing carriage returns and indentation. The amount of indentation per
-// depth level is given as spaces. Pass etree.NoIndent for spaces if you want
-// no indentation at all.
+// Indent modifies the document's element tree by inserting character data
+// tokens containing carriage returns and indentation. The amount of
+// indentation per depth level is given as spaces. Pass etree.NoIndent for
+// spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
 	var indent indentFunc
 	switch {
@@ -869,8 +869,7 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteByte('"')
 }
 
-// NewText creates a parentless CharData token containing an XML character
-// data entity.
+// NewText creates a parentless CharData token containing character data.
 func NewText(text string) *CharData {
 	return newCharData(text, 0, nil)
 }
@@ -880,16 +879,15 @@ func NewCData(data string) *CharData {
 	return newCharData(data, cdataFlag, nil)
 }
 
-// NewCharData creates a parentless CharData token containing an XML character
-// data entity.
+// NewCharData creates a parentless CharData token containing character data.
 //
-// Deprecated: NewCharData is deprecated. Use NewText, which does the same
-// thing, instead.
+// Deprecated: NewCharData is deprecated. Instead, use NewText, which does the
+// same thing.
 func NewCharData(data string) *CharData {
 	return newCharData(data, 0, nil)
 }
 
-// newCharData creates an XML character data entity and binds it to a parent
+// newCharData creates a character data token and binds it to a parent
 // element. If parent is nil, the CharData token remains unbound.
 func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	c := &CharData{
@@ -903,16 +901,25 @@ func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	return c
 }
 
-// CreateCharData creates a CharData token containing an XML character data
-// entity and adds it as a child of element e.
-func (e *Element) CreateCharData(data string) *CharData {
-	return newCharData(data, 0, e)
+// CreateText creates a CharData token containing character data and adds it
+// as a child of element e.
+func (e *Element) CreateText(text string) *CharData {
+	return newCharData(text, 0, e)
 }
 
 // CreateCData creates a CharData token containing a CDATA section and adds it
 // as a child of element e.
 func (e *Element) CreateCData(data string) *CharData {
 	return newCharData(data, cdataFlag, e)
+}
+
+// CreateCharData creates a CharData token containing character data and adds
+// it as a child of element e.
+//
+// Deprecated: CreateCharData is deprecated. Instead, use CreateText, which
+// does the same thing.
+func (e *Element) CreateCharData(data string) *CharData {
+	return newCharData(data, 0, e)
 }
 
 // dup duplicates the character data.
@@ -947,7 +954,7 @@ func (c *CharData) setParent(parent *Element) {
 	c.parent = parent
 }
 
-// writeTo serializes the character data entity to the writer.
+// writeTo serializes character data to the writer.
 func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
 	if c.IsCData() {
 		w.WriteString(`<![CDATA[`)
