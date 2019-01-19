@@ -653,3 +653,60 @@ func TestCharData(t *testing.T) {
 		t.Error("etree: invalid text")
 	}
 }
+
+func TestIndentSettings(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	root.CreateElement("child1")
+	root.CreateElement("child2")
+
+	doc.WriteSettings.UseCRLF = false
+	doc.Indent(20)
+
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, "<root>\n                    <child1/>\n                    <child2/>\n</root>\n")
+
+	doc.WriteSettings.UseCRLF = true
+	doc.Indent(4)
+
+	s, err = doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, "<root>\r\n    <child1/>\r\n    <child2/>\r\n</root>\r\n")
+
+	doc.WriteSettings.UseCRLF = true
+	doc.IndentTabs()
+
+	s, err = doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, "<root>\r\n\t<child1/>\r\n\t<child2/>\r\n</root>\r\n")
+
+	doc.WriteSettings.UseCRLF = false
+	doc.Indent(4)
+
+	s, err = doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, "<root>\n    <child1/>\n    <child2/>\n</root>\n")
+
+	doc.WriteSettings.UseCRLF = false
+	doc.IndentTabs()
+
+	s, err = doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	checkEq(t, s, "<root>\n\t<child1/>\n\t<child2/>\n</root>\n")
+}

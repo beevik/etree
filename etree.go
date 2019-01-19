@@ -65,6 +65,11 @@ type WriteSettings struct {
 	// attribute value characters &, < and ". If false, XML character
 	// references are also produced for > and '. Default: false.
 	CanonicalAttrVal bool
+
+	// When outputting indented XML, use a carriage return and linefeed
+	// ("\r\n") as a new-line delimiter instead of just a linefeed ("\n").
+	// This is useful on Windows-based systems.
+	UseCRLF bool
 }
 
 // newWriteSettings creates a default WriteSettings record.
@@ -73,6 +78,7 @@ func newWriteSettings() WriteSettings {
 		CanonicalEndTags: false,
 		CanonicalText:    false,
 		CanonicalAttrVal: false,
+		UseCRLF:          false,
 	}
 }
 
@@ -273,11 +279,11 @@ type indentFunc func(depth int) string
 // spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
 	var indent indentFunc
-	switch {
-	case spaces < 0:
-		indent = func(depth int) string { return "" }
+	switch d.WriteSettings.UseCRLF {
+	case true:
+		indent = func(depth int) string { return indentCRLF(depth*spaces, indentSpaces) }
 	default:
-		indent = func(depth int) string { return crIndent(depth*spaces, crsp) }
+		indent = func(depth int) string { return indentLF(depth*spaces, indentSpaces) }
 	}
 	d.Element.indent(0, indent)
 }
@@ -286,7 +292,13 @@ func (d *Document) Indent(spaces int) {
 // entities containing carriage returns and tabs for indentation.  One tab is
 // used per indentation level.
 func (d *Document) IndentTabs() {
-	indent := func(depth int) string { return crIndent(depth, crtab) }
+	var indent indentFunc
+	switch d.WriteSettings.UseCRLF {
+	case true:
+		indent = func(depth int) string { return indentCRLF(depth, indentTabs) }
+	default:
+		indent = func(depth int) string { return indentLF(depth, indentTabs) }
+	}
 	d.Element.indent(0, indent)
 }
 

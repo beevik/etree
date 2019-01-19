@@ -149,22 +149,35 @@ func spaceDecompose(str string) (space, key string) {
 	return str[:colon], str[colon+1:]
 }
 
-// Strings used by crIndent
+// Strings used by indentCRLF and indentLF
 const (
-	crsp  = "\n                                                                "
-	crtab = "\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"
+	indentSpaces = "\r\n                                                                "
+	indentTabs   = "\r\n\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t"
 )
 
-// crIndent returns a carriage return followed by n copies of the
-// first non-CR character in the source string.
-func crIndent(n int, source string) string {
+// indentCRLF returns a CRLF newline followed by n copies of the first
+// non-CRLF character in the source string.
+func indentCRLF(n int, source string) string {
 	switch {
 	case n < 0:
-		return source[:1]
-	case n < len(source):
-		return source[:n+1]
+		return source[:2]
+	case n < len(source)-1:
+		return source[:n+2]
 	default:
-		return source + strings.Repeat(source[1:2], n-len(source)+1)
+		return source + strings.Repeat(source[2:3], n-len(source))
+	}
+}
+
+// indentLF returns a LF newline followed by n copies of the first non-LF
+// character in the source string.
+func indentLF(n int, source string) string {
+	switch {
+	case n < 0:
+		return source[1:2]
+	case n < len(source)-1:
+		return source[1 : n+2]
+	default:
+		return source[1:] + strings.Repeat(source[2:3], n-len(source))
 	}
 }
 
