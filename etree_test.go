@@ -7,6 +7,7 @@ package etree
 import (
 	"encoding/xml"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -657,56 +658,55 @@ func TestCharData(t *testing.T) {
 func TestIndentSettings(t *testing.T) {
 	doc := NewDocument()
 	root := doc.CreateElement("root")
-	root.CreateElement("child1")
-	root.CreateElement("child2")
+	ch1 := root.CreateElement("child1")
+	ch1.CreateElement("child2")
 
-	doc.WriteSettings.UseCRLF = false
-	doc.Indent(20)
-
+	// First test with NoIndent.
+	doc.Indent(NoIndent)
 	s, err := doc.WriteToString()
 	if err != nil {
 		t.Error("etree: failed to serialize document")
 	}
+	expected := "<root><child1><child2/></child1></root>"
+	checkEq(t, s, expected)
 
-	checkEq(t, s, "<root>\n                    <child1/>\n                    <child2/>\n</root>\n")
-
-	doc.WriteSettings.UseCRLF = true
-	doc.Indent(4)
-
-	s, err = doc.WriteToString()
-	if err != nil {
-		t.Error("etree: failed to serialize document")
+	// Run all indent test cases.
+	tests := []struct {
+		useTabs, useCRLF bool
+		ws, nl           string
+	}{
+		{false, false, " ", "\n"},
+		{false, true, " ", "\r\n"},
+		{true, false, "\t", "\n"},
+		{true, true, "\t", "\r\n"},
 	}
 
-	checkEq(t, s, "<root>\r\n    <child1/>\r\n    <child2/>\r\n</root>\r\n")
-
-	doc.WriteSettings.UseCRLF = true
-	doc.IndentTabs()
-
-	s, err = doc.WriteToString()
-	if err != nil {
-		t.Error("etree: failed to serialize document")
+	for _, test := range tests {
+		doc.WriteSettings.UseCRLF = test.useCRLF
+		if test.useTabs {
+			doc.IndentTabs()
+			s, err := doc.WriteToString()
+			if err != nil {
+				t.Error("etree: failed to serialize document")
+			}
+			tab := test.ws
+			expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
+				tab + tab + "<child2/>" + test.nl + tab +
+				"</child1>" + test.nl + "</root>" + test.nl
+			checkEq(t, s, expected)
+		} else {
+			for i := 0; i < 256; i++ {
+				doc.Indent(i)
+				s, err := doc.WriteToString()
+				if err != nil {
+					t.Error("etree: failed to serialize document")
+				}
+				tab := strings.Repeat(test.ws, i)
+				expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
+					tab + tab + "<child2/>" + test.nl + tab +
+					"</child1>" + test.nl + "</root>" + test.nl
+				checkEq(t, s, expected)
+			}
+		}
 	}
-
-	checkEq(t, s, "<root>\r\n\t<child1/>\r\n\t<child2/>\r\n</root>\r\n")
-
-	doc.WriteSettings.UseCRLF = false
-	doc.Indent(4)
-
-	s, err = doc.WriteToString()
-	if err != nil {
-		t.Error("etree: failed to serialize document")
-	}
-
-	checkEq(t, s, "<root>\n    <child1/>\n    <child2/>\n</root>\n")
-
-	doc.WriteSettings.UseCRLF = false
-	doc.IndentTabs()
-
-	s, err = doc.WriteToString()
-	if err != nil {
-		t.Error("etree: failed to serialize document")
-	}
-
-	checkEq(t, s, "<root>\n\t<child1/>\n\t<child2/>\n</root>\n")
 }

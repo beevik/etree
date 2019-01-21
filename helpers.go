@@ -164,7 +164,7 @@ func indentCRLF(n int, source string) string {
 	case n < len(source)-1:
 		return source[:n+2]
 	default:
-		return source + strings.Repeat(source[2:3], n-len(source))
+		return source + strings.Repeat(source[2:3], n-len(source)+2)
 	}
 }
 
@@ -177,7 +177,7 @@ func indentLF(n int, source string) string {
 	case n < len(source)-1:
 		return source[1 : n+2]
 	default:
-		return source[1:] + strings.Repeat(source[2:3], n-len(source))
+		return source[1:] + strings.Repeat(source[2:3], n-len(source)+2)
 	}
 }
 

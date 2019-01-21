@@ -279,8 +279,10 @@ type indentFunc func(depth int) string
 // spaces if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
 	var indent indentFunc
-	switch d.WriteSettings.UseCRLF {
-	case true:
+	switch {
+	case spaces < 0:
+		indent = func(depth int) string { return "" }
+	case d.WriteSettings.UseCRLF == true:
 		indent = func(depth int) string { return indentCRLF(depth*spaces, indentSpaces) }
 	default:
 		indent = func(depth int) string { return indentLF(depth*spaces, indentSpaces) }
