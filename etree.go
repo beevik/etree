@@ -680,14 +680,16 @@ func (e *Element) indent(depth int, indent indentFunc) {
 	e.Child = make([]Token, 0, n*2+1)
 	isCharData, firstNonCharData := false, true
 	for _, c := range oldChild {
-
-		// Insert CR+indent before child if it's not character data.
+		// Insert NL+indent before child if it's not character data.
 		// Exceptions: when it's the first non-character-data child, or when
 		// the child is at root depth.
 		_, isCharData = c.(*CharData)
 		if !isCharData {
 			if !firstNonCharData || depth > 0 {
-				newCharData(indent(depth), whitespaceFlag, e)
+				s := indent(depth)
+				if s != "" {
+					newCharData(s, whitespaceFlag, e)
+				}
 			}
 			firstNonCharData = false
 		}
@@ -700,10 +702,13 @@ func (e *Element) indent(depth int, indent indentFunc) {
 		}
 	}
 
-	// Insert CR+indent before the last child.
+	// Insert NL+indent before the last child.
 	if !isCharData {
 		if !firstNonCharData || depth > 0 {
-			newCharData(indent(depth-1), whitespaceFlag, e)
+			s := indent(depth - 1)
+			if s != "" {
+				newCharData(s, whitespaceFlag, e)
+			}
 		}
 	}
 }
