@@ -122,7 +122,7 @@ type Attr struct {
 type charDataFlags uint8
 
 const (
-	// The CharData was created as whitespace.
+	// The CharData was created by an indent function as whitespace.
 	whitespaceFlag charDataFlags = 1 << iota
 
 	// The CharData contains a CDATA section.
@@ -1111,16 +1111,16 @@ func (c *CharData) dup(parent *Element) Token {
 	}
 }
 
-// IsWhitespace returns true if the character data token was created to
-// contain only whitespace.
-func (c *CharData) IsWhitespace() bool {
-	return (c.flags & whitespaceFlag) != 0
-}
-
 // IsCData returns true if the character data token is to be encoded as a
 // CDATA section.
 func (c *CharData) IsCData() bool {
 	return (c.flags & cdataFlag) != 0
+}
+
+// IsWhitespace returns true if the character data token was created by one of
+// the document Indent methods to contain only whitespace.
+func (c *CharData) IsWhitespace() bool {
+	return (c.flags & whitespaceFlag) != 0
 }
 
 // Parent returns the character data token's parent element, or nil if it has
