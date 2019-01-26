@@ -180,6 +180,7 @@ func TestPath(t *testing.T) {
 }
 
 func fail(t *testing.T, test test) {
+	t.Helper()
 	t.Errorf("etree: failed test '%s'\n", test.path)
 }
 

@@ -86,8 +86,10 @@ func newWriteSettings() WriteSettings {
 // Comment, Directive, or ProcInst.
 type Token interface {
 	Parent() *Element
+	Index() int
 	dup(parent *Element) Token
 	setParent(parent *Element)
+	setIndex(index int)
 	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
@@ -107,6 +109,7 @@ type Element struct {
 	Attr       []Attr   // key-value attribute pairs
 	Child      []Token  // child tokens (elements, comments, etc.)
 	parent     *Element // parent element
+	index      int      // token index in parent's children
 }
 
 // An Attr represents a key-value attribute of an XML element.
@@ -131,6 +134,7 @@ const (
 type CharData struct {
 	Data   string
 	parent *Element
+	index  int
 	flags  charDataFlags
 }
 
@@ -138,12 +142,14 @@ type CharData struct {
 type Comment struct {
 	Data   string
 	parent *Element
+	index  int
 }
 
 // A Directive represents an XML directive.
 type Directive struct {
 	Data   string
 	parent *Element
+	index  int
 }
 
 // A ProcInst represents an XML processing instruction.
@@ -151,6 +157,7 @@ type ProcInst struct {
 	Target string
 	Inst   string
 	parent *Element
+	index  int
 }
 
 // NewDocument creates an XML document without a root element.
@@ -187,16 +194,23 @@ func (d *Document) SetRoot(e *Element) {
 	if e.parent != nil {
 		e.parent.RemoveChild(e)
 	}
-	e.setParent(&d.Element)
 
-	for i, t := range d.Child {
+	p := &d.Element
+	e.setParent(p)
+
+	// If there is already a root element, replace it.
+	for i, t := range p.Child {
 		if _, ok := t.(*Element); ok {
 			t.setParent(nil)
-			d.Child[i] = e
+			t.setIndex(-1)
+			p.Child[i] = e
+			e.setIndex(i)
 			return
 		}
 	}
-	d.Child = append(d.Child, e)
+
+	// No existing root element, so add it.
+	p.addChild(e)
 }
 
 // ReadFrom reads XML from the reader r into the document d. It returns the
@@ -335,7 +349,7 @@ func (e *Element) Copy() *Element {
 	return e.dup(parent).(*Element)
 }
 
-// Text returns the characters immediately following the element's opening
+// Text returns all character data immediately following the element's opening
 // tag.
 func (e *Element) Text() string {
 	if len(e.Child) == 0 {
@@ -357,28 +371,110 @@ func (e *Element) Text() string {
 	return text
 }
 
-// SetText replaces an element's subsidiary CharData text with a new string.
+// SetText replaces all character data immediately following an element's
+// opening tag with the requested string.
 func (e *Element) SetText(text string) {
-	e.setCharData(text, 0)
+	e.replaceText(0, text, 0)
 }
 
-// SetCData replaces an element's subsidiary CharData text with a new string
-// encoded into a CDATA section.
+// SetCData replaces all character data immediately following an element's
+// opening tag with a CDATA section.
 func (e *Element) SetCData(text string) {
-	e.setCharData(text, cdataFlag)
+	e.replaceText(0, text, cdataFlag)
 }
 
-// setCharData is a helper function used by SetText and SetCData.
-func (e *Element) setCharData(text string, flags charDataFlags) {
-	if len(e.Child) > 0 {
-		if cd, ok := e.Child[0].(*CharData); ok {
-			cd.Data, cd.flags = text, flags
-			return
+// Tail returns all character data immediately following the element's end
+// tag.
+func (e *Element) Tail() string {
+	if e.Parent() == nil {
+		return ""
+	}
+
+	p := e.Parent()
+	i := e.Index()
+
+	text := ""
+	for _, ch := range p.Child[i+1:] {
+		if cd, ok := ch.(*CharData); ok {
+			if text == "" {
+				text = cd.Data
+			} else {
+				text = text + cd.Data
+			}
+		} else {
+			break
 		}
 	}
-	cd := newCharData(text, flags, e)
-	copy(e.Child[1:], e.Child[0:])
-	e.Child[0] = cd
+	return text
+}
+
+// SetTail replaces all character data immediately following the element's end
+// tag with the requested string.
+func (e *Element) SetTail(text string) {
+	if e.Parent() == nil {
+		return
+	}
+
+	p := e.Parent()
+	p.replaceText(e.Index()+1, text, 0)
+}
+
+// replaceText is a helper function that replaces a series of chardata tokens
+// starting at index i with the requested text.
+func (e *Element) replaceText(i int, text string, flags charDataFlags) {
+	end := e.findTermCharDataIndex(i)
+
+	switch {
+	case end == i:
+		if text != "" {
+			// insert a new chardata token at index i
+			cd := newCharData(text, flags, nil)
+			e.InsertChildAt(i, cd)
+		}
+
+	case end == i+1:
+		if text == "" {
+			// remove the chardata token at index i
+			e.RemoveChildAt(i)
+		} else {
+			// replace the first and only character token at index i
+			cd := e.Child[i].(*CharData)
+			cd.Data, cd.flags = text, flags
+		}
+
+	default:
+		if text == "" {
+			// remove all chardata tokens starting from index i
+			copy(e.Child[i:], e.Child[end:])
+			removed := end - i
+			e.Child = e.Child[:len(e.Child)-removed]
+			for j := i; j < len(e.Child); j++ {
+				e.Child[j].setIndex(j)
+			}
+		} else {
+			// replace the first chardata token at index i and remove all
+			// subsequent chardata tokens
+			cd := e.Child[i].(*CharData)
+			cd.Data, cd.flags = text, flags
+			copy(e.Child[i+1:], e.Child[end:])
+			removed := end - (i + 1)
+			e.Child = e.Child[:len(e.Child)-removed]
+			for j := i + 1; j < len(e.Child); j++ {
+				e.Child[j].setIndex(j)
+			}
+		}
+	}
+}
+
+// findTermCharDataIndex finds the index of the first child token that isn't
+// a CharData token. It starts from the requested start index.
+func (e *Element) findTermCharDataIndex(start int) int {
+	for i := start; i < len(e.Child); i++ {
+		if _, ok := e.Child[i].(*CharData); !ok {
+			return i
+		}
+	}
+	return len(e.Child)
 }
 
 // CreateElement creates an element with the specified tag and adds it as the
@@ -396,43 +492,93 @@ func (e *Element) AddChild(t Token) {
 	if t.Parent() != nil {
 		t.Parent().RemoveChild(t)
 	}
+
 	t.setParent(e)
 	e.addChild(t)
 }
 
 // InsertChild inserts the token t before e's existing child token ex. If ex
-// is nil (or if ex is not a child of e), then t is added to the end of e's
-// child token list. If token t was already the child of another element, it
-// is first removed from its current parent element.
+// is nil or ex is not a child of e, then t is added to the end of e's child
+// token list. If token t was already the child of another element, it is
+// first removed from its current parent element.
+//
+// Deprecated: InsertChild is deprecated. Use InsertChildAt instead.
 func (e *Element) InsertChild(ex Token, t Token) {
+	if ex == nil || ex.Parent() != e {
+		e.AddChild(t)
+		return
+	}
+
 	if t.Parent() != nil {
 		t.Parent().RemoveChild(t)
 	}
+
 	t.setParent(e)
 
-	for i, c := range e.Child {
-		if c == ex {
-			e.Child = append(e.Child, nil)
-			copy(e.Child[i+1:], e.Child[i:])
-			e.Child[i] = t
-			return
-		}
+	i := ex.Index()
+	e.Child = append(e.Child, nil)
+	copy(e.Child[i+1:], e.Child[i:])
+	e.Child[i] = t
+
+	for j := i; j < len(e.Child); j++ {
+		e.Child[j].setIndex(j)
 	}
-	e.addChild(t)
+}
+
+// InsertChildAt inserts the token t into the element e's list of child tokens
+// just before the requested index. If the index is greater than or equal to
+// the length of the list of child tokens, the token t is added to the end of
+// the list.
+func (e *Element) InsertChildAt(index int, t Token) {
+	if index >= len(e.Child) {
+		e.AddChild(t)
+		return
+	}
+
+	if t.Parent() != nil {
+		if t.Parent() == e && t.Index() > index {
+			index--
+		}
+		t.Parent().RemoveChild(t)
+	}
+
+	t.setParent(e)
+
+	e.Child = append(e.Child, nil)
+	copy(e.Child[index+1:], e.Child[index:])
+	e.Child[index] = t
+
+	for j := index; j < len(e.Child); j++ {
+		e.Child[j].setIndex(j)
+	}
 }
 
 // RemoveChild attempts to remove the token t from element e's list of
 // children. If the token t is a child of e, then it is returned. Otherwise,
 // nil is returned.
 func (e *Element) RemoveChild(t Token) Token {
-	for i, c := range e.Child {
-		if c == t {
-			e.Child = append(e.Child[:i], e.Child[i+1:]...)
-			c.setParent(nil)
-			return t
-		}
+	if t.Parent() != e {
+		return nil
 	}
-	return nil
+	return e.RemoveChildAt(t.Index())
+}
+
+// RemoveChildAt removes the index-th child token from the element e. The
+// removed child token is returned. If the index is out of bounds, no child is
+// removed and nil is returned.
+func (e *Element) RemoveChildAt(index int) Token {
+	if index >= len(e.Child) {
+		return nil
+	}
+
+	t := e.Child[index]
+	for j := index + 1; j < len(e.Child); j++ {
+		e.Child[j].setIndex(j - 1)
+	}
+	e.Child = append(e.Child[:index], e.Child[index+1:]...)
+	t.setIndex(-1)
+	t.setParent(nil)
+	return t
 }
 
 // ReadFrom reads XML from the reader r and stores the result as a new child
@@ -734,6 +880,7 @@ func (e *Element) stripIndent() {
 			continue
 		}
 		newChild[j] = c
+		newChild[j].setIndex(j)
 		j++
 	}
 	e.Child = newChild
@@ -763,9 +910,21 @@ func (e *Element) Parent() *Element {
 	return e.parent
 }
 
+// Index returns the index of this element within its parent element's
+// list of child tokens. If this element has no parent element, the index
+// is -1.
+func (e *Element) Index() int {
+	return e.index
+}
+
 // setParent replaces the element token's parent.
 func (e *Element) setParent(parent *Element) {
 	e.parent = parent
+}
+
+// setIndex sets the element token's index within its parent's Child slice.
+func (e *Element) setIndex(index int) {
+	e.index = index
 }
 
 // writeTo serializes the element to the writer w.
@@ -809,6 +968,7 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 
 // addChild adds a child token to the element e.
 func (e *Element) addChild(t Token) {
+	t.setIndex(len(e.Child))
 	e.Child = append(e.Child, t)
 }
 
@@ -912,6 +1072,7 @@ func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	c := &CharData{
 		Data:   data,
 		parent: parent,
+		index:  -1,
 		flags:  flags,
 	}
 	if parent != nil {
@@ -968,9 +1129,22 @@ func (c *CharData) Parent() *Element {
 	return c.parent
 }
 
+// Index returns the index of this CharData token within its parent element's
+// list of child tokens. If this CharData token has no parent element, the
+// index is -1.
+func (c *CharData) Index() int {
+	return c.index
+}
+
 // setParent replaces the character data token's parent.
 func (c *CharData) setParent(parent *Element) {
 	c.parent = parent
+}
+
+// setIndex sets the CharData token's index within its parent element's Child
+// slice.
+func (c *CharData) setIndex(index int) {
+	c.index = index
 }
 
 // writeTo serializes character data to the writer.
@@ -1001,6 +1175,7 @@ func newComment(comment string, parent *Element) *Comment {
 	c := &Comment{
 		Data:   comment,
 		parent: parent,
+		index:  -1,
 	}
 	if parent != nil {
 		parent.addChild(c)
@@ -1026,9 +1201,22 @@ func (c *Comment) Parent() *Element {
 	return c.parent
 }
 
+// Index returns the index of this Comment token within its parent element's
+// list of child tokens. If this Comment token has no parent element, the
+// index is -1.
+func (c *Comment) Index() int {
+	return c.index
+}
+
 // setParent replaces the comment token's parent.
 func (c *Comment) setParent(parent *Element) {
 	c.parent = parent
+}
+
+// setIndex sets the Comment token's index within its parent element's Child
+// slice.
+func (c *Comment) setIndex(index int) {
+	c.index = index
 }
 
 // writeTo serialies the comment to the writer.
@@ -1049,6 +1237,7 @@ func newDirective(data string, parent *Element) *Directive {
 	d := &Directive{
 		Data:   data,
 		parent: parent,
+		index:  -1,
 	}
 	if parent != nil {
 		parent.addChild(d)
@@ -1076,9 +1265,22 @@ func (d *Directive) Parent() *Element {
 	return d.parent
 }
 
+// Index returns the index of this Directive token within its parent element's
+// list of child tokens. If this Directive token has no parent element, the
+// index is -1.
+func (d *Directive) Index() int {
+	return d.index
+}
+
 // setParent replaces the directive token's parent.
 func (d *Directive) setParent(parent *Element) {
 	d.parent = parent
+}
+
+// setIndex sets the Directive token's index within its parent element's Child
+// slice.
+func (d *Directive) setIndex(index int) {
+	d.index = index
 }
 
 // writeTo serializes the XML directive to the writer.
@@ -1100,6 +1302,7 @@ func newProcInst(target, inst string, parent *Element) *ProcInst {
 		Target: target,
 		Inst:   inst,
 		parent: parent,
+		index:  -1,
 	}
 	if parent != nil {
 		parent.addChild(p)
@@ -1128,9 +1331,22 @@ func (p *ProcInst) Parent() *Element {
 	return p.parent
 }
 
+// Index returns the index of this ProcInst token within its parent element's
+// list of child tokens. If this ProcInst token has no parent element, the
+// index is -1.
+func (p *ProcInst) Index() int {
+	return p.index
+}
+
 // setParent replaces the processing instruction token's parent.
 func (p *ProcInst) setParent(parent *Element) {
 	p.parent = parent
+}
+
+// setIndex sets the processing instruction token's index within its parent
+// element's Child slice.
+func (p *ProcInst) setIndex(index int) {
+	p.index = index
 }
 
 // writeTo serializes the processing instruction to the writer.

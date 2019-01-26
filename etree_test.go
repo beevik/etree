@@ -11,9 +11,49 @@ import (
 	"testing"
 )
 
-func checkEq(t *testing.T, got, want string) {
+func checkStrEq(t *testing.T, got, want string) {
+	t.Helper()
 	if got != want {
 		t.Errorf("etree: unexpected result.\nGot:\n%s\nWanted:\n%s\n", got, want)
+	}
+}
+
+func checkStrBinaryEq(t *testing.T, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("etree: unexpected result.\nGot:\n%v\nWanted:\n%v\n", []byte(got), []byte(want))
+	}
+}
+
+func checkIntEq(t *testing.T, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Errorf("etree: unexpected integer. Got: %d. Wanted: %d\n", got, want)
+	}
+}
+
+func checkDocEq(t *testing.T, doc *Document, expected string) {
+	t.Helper()
+	doc.Indent(NoIndent)
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+	if s != expected {
+		t.Errorf("etree: unexpected document.\nGot:\n%s\nWanted:\n%s\n", s, expected)
+	}
+}
+
+func checkIndexes(t *testing.T, e *Element) {
+	t.Helper()
+	for i := 0; i < len(e.Child); i++ {
+		c := e.Child[i]
+		if c.Index() != i {
+			t.Errorf("Child index mismatch. Got %d, expected %d.", c.Index(), i)
+		}
+		if ce, ok := c.(*Element); ok {
+			checkIndexes(t, ce)
+		}
 	}
 }
 
@@ -39,6 +79,8 @@ func TestDocument(t *testing.T) {
 	review.SetCData(">>> Excellent book")
 	doc.IndentTabs()
 
+	checkIndexes(t, &doc.Element)
+
 	// Serialize the document to a string
 	s, err := doc.WriteToString()
 	if err != nil {
@@ -58,7 +100,7 @@ func TestDocument(t *testing.T) {
 	</book>
 </store>
 `
-	checkEq(t, s, expected)
+	checkStrEq(t, s, expected)
 
 	// Test the structure of the XML
 	if doc.Root() != store {
@@ -134,7 +176,7 @@ func TestDocument(t *testing.T) {
 	if element != nil {
 		t.Error("etree: incorrect SelectElement result")
 	}
-	element = book.RemoveChild(title).(*Element)
+	element = book.RemoveChildAt(title.Index()).(*Element)
 	if element != title {
 		t.Error("etree: incorrect RemoveElement result")
 	}
@@ -237,7 +279,7 @@ func TestEscapeCodes(t *testing.T) {
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
 		}
-		checkEq(t, s, c.normal)
+		checkStrEq(t, s, c.normal)
 
 		doc.WriteSettings.CanonicalText = false
 		doc.WriteSettings.CanonicalAttrVal = true
@@ -245,7 +287,7 @@ func TestEscapeCodes(t *testing.T) {
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
 		}
-		checkEq(t, s, c.attrCanonical)
+		checkStrEq(t, s, c.attrCanonical)
 
 		doc.WriteSettings.CanonicalText = true
 		doc.WriteSettings.CanonicalAttrVal = false
@@ -253,7 +295,7 @@ func TestEscapeCodes(t *testing.T) {
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
 		}
-		checkEq(t, s, c.textCanonical)
+		checkStrEq(t, s, c.textCanonical)
 	}
 }
 
@@ -291,7 +333,7 @@ func TestCanonical(t *testing.T) {
   <Person name="Sally" escape="&#xD;&#xA;&#x9;&lt;'&quot;>&amp;"></Person>
 </People>
 `
-	checkEq(t, s, expected)
+	checkStrEq(t, s, expected)
 }
 
 func TestCopy(t *testing.T) {
@@ -334,7 +376,7 @@ func TestCopy(t *testing.T) {
 		t.Error("etree: incorrect FindElement result")
 	}
 
-	e1.parent.RemoveChild(e1)
+	e1.parent.RemoveChildAt(e1.Index())
 	s1, _ = doc.WriteToString()
 	s2, _ = doc2.WriteToString()
 	if s1 == s2 {
@@ -423,7 +465,7 @@ func TestInsertChild(t *testing.T) {
 	year.SetText("1861")
 
 	book := doc.FindElement("//book")
-	book.InsertChild(book.SelectElement("t:title"), year)
+	book.InsertChildAt(book.SelectElement("t:title").Index(), year)
 
 	expected1 := `<book lang="en">
   <year>1861</year>
@@ -433,10 +475,10 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s1, _ := doc.WriteToString()
-	checkEq(t, s1, expected1)
+	checkStrEq(t, s1, expected1)
 
-	book.RemoveChild(year)
-	book.InsertChild(book.SelectElement("author"), year)
+	book.RemoveChildAt(year.Index())
+	book.InsertChildAt(book.SelectElement("author").Index(), year)
 
 	expected2 := `<book lang="en">
   <t:title>Great Expectations</t:title>
@@ -446,10 +488,10 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s2, _ := doc.WriteToString()
-	checkEq(t, s2, expected2)
+	checkStrEq(t, s2, expected2)
 
-	book.RemoveChild(year)
-	book.InsertChild(book.SelectElement("UNKNOWN"), year)
+	book.RemoveChildAt(year.Index())
+	book.InsertChildAt(len(book.Child), year)
 
 	expected3 := `<book lang="en">
   <t:title>Great Expectations</t:title>
@@ -459,10 +501,10 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s3, _ := doc.WriteToString()
-	checkEq(t, s3, expected3)
+	checkStrEq(t, s3, expected3)
 
-	book.RemoveChild(year)
-	book.InsertChild(nil, year)
+	book.RemoveChildAt(year.Index())
+	book.InsertChildAt(999, year)
 
 	expected4 := `<book lang="en">
   <t:title>Great Expectations</t:title>
@@ -472,7 +514,7 @@ func TestInsertChild(t *testing.T) {
 `
 	doc.Indent(2)
 	s4, _ := doc.WriteToString()
-	checkEq(t, s4, expected4)
+	checkStrEq(t, s4, expected4)
 }
 
 func TestCdata(t *testing.T) {
@@ -524,7 +566,7 @@ func TestAddChild(t *testing.T) {
 `
 	doc1.Indent(2)
 	s1, _ := doc1.WriteToString()
-	checkEq(t, s1, expected1)
+	checkStrEq(t, s1, expected1)
 
 	expected2 := `<root>
   <t:title>Great Expectations</t:title>
@@ -533,7 +575,7 @@ func TestAddChild(t *testing.T) {
 `
 	doc2.Indent(2)
 	s2, _ := doc2.WriteToString()
-	checkEq(t, s2, expected2)
+	checkStrEq(t, s2, expected2)
 }
 
 func TestSetRoot(t *testing.T) {
@@ -569,13 +611,13 @@ func TestSetRoot(t *testing.T) {
 `
 	doc.Indent(2)
 	s1, _ := doc.WriteToString()
-	checkEq(t, s1, expected1)
+	checkStrEq(t, s1, expected1)
 
 	doc.SetRoot(origroot)
 	doc.Indent(2)
 	expected2 := testdoc
 	s2, _ := doc.WriteToString()
-	checkEq(t, s2, expected2)
+	checkStrEq(t, s2, expected2)
 
 	doc2 := NewDocument()
 	doc2.CreateProcInst("test", `a="wow"`)
@@ -583,19 +625,19 @@ func TestSetRoot(t *testing.T) {
 	doc2.Indent(2)
 	expected3 := expected1
 	s3, _ := doc2.WriteToString()
-	checkEq(t, s3, expected3)
+	checkStrEq(t, s3, expected3)
 
 	doc2.SetRoot(doc.Root())
 	doc2.Indent(2)
 	expected4 := testdoc
 	s4, _ := doc2.WriteToString()
-	checkEq(t, s4, expected4)
+	checkStrEq(t, s4, expected4)
 
 	expected5 := `<?test a="wow"?>
 `
 	doc.Indent(2)
 	s5, _ := doc.WriteToString()
-	checkEq(t, s5, expected5)
+	checkStrEq(t, s5, expected5)
 }
 
 func TestSortAttrs(t *testing.T) {
@@ -609,7 +651,7 @@ func TestSortAttrs(t *testing.T) {
 	doc.Root().SortAttrs()
 	doc.Indent(2)
 	out, _ := doc.WriteToString()
-	checkEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
+	checkStrEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
 }
 
 func TestCharsetReaderEncoding(t *testing.T) {
@@ -643,7 +685,7 @@ func TestCharData(t *testing.T) {
 		t.Error("etree: failed to serialize document")
 	}
 
-	checkEq(t, s, `<root>This <![CDATA[is ]]>a <![CDATA[text ]]>Element!!</root>`)
+	checkStrEq(t, s, `<root>This <![CDATA[is ]]>a <![CDATA[text ]]>Element!!</root>`)
 
 	// Check we can parse the output
 	err = doc.ReadFromString(s)
@@ -668,7 +710,7 @@ func TestIndentSettings(t *testing.T) {
 		t.Error("etree: failed to serialize document")
 	}
 	expected := "<root><child1><child2/></child1></root>"
-	checkEq(t, s, expected)
+	checkStrEq(t, s, expected)
 
 	// Run all indent test cases.
 	tests := []struct {
@@ -693,7 +735,7 @@ func TestIndentSettings(t *testing.T) {
 			expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
 				tab + tab + "<child2/>" + test.nl + tab +
 				"</child1>" + test.nl + "</root>" + test.nl
-			checkEq(t, s, expected)
+			checkStrEq(t, s, expected)
 		} else {
 			for i := 0; i < 256; i++ {
 				doc.Indent(i)
@@ -705,8 +747,167 @@ func TestIndentSettings(t *testing.T) {
 				expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
 					tab + tab + "<child2/>" + test.nl + tab +
 					"</child1>" + test.nl + "</root>" + test.nl
-				checkEq(t, s, expected)
+				checkStrEq(t, s, expected)
 			}
 		}
 	}
+}
+
+func TestTokenIndexing(t *testing.T) {
+	s := `<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="style.xsl"?>
+<store xmlns:t="urn:books-com:titles">
+	<!Directive>
+	<!--This is a comment-->
+	<book lang="en">
+		<t:title>Great Expectations</t:title>
+		<author>Charles Dickens</author>
+		<review/>
+	</book>
+</store>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Error("etree: failed to parse document")
+	}
+
+	review := doc.FindElement("/store/book/review")
+	review.SetText("Excellent")
+
+	checkIndexes(t, &doc.Element)
+
+	doc.Indent(4)
+	checkIndexes(t, &doc.Element)
+
+	doc.Indent(NoIndent)
+	checkIndexes(t, &doc.Element)
+
+	e := NewElement("foo")
+	store := doc.SelectElement("store")
+	store.InsertChildAt(0, e)
+	checkIndexes(t, &doc.Element)
+
+	store.RemoveChildAt(0)
+	checkIndexes(t, &doc.Element)
+}
+
+func TestSetText(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+
+	checkDocEq(t, doc, `<root/>`)
+	checkStrEq(t, root.Text(), "")
+	checkIntEq(t, len(root.Child), 0)
+
+	root.SetText("foo")
+	checkDocEq(t, doc, `<root>foo</root>`)
+	checkStrEq(t, root.Text(), "foo")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.SetText("bar")
+	checkDocEq(t, doc, `<root>bar</root>`)
+	checkStrEq(t, root.Text(), "bar")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.CreateCData("cdata")
+	checkDocEq(t, doc, `<root>bar<![CDATA[cdata]]></root>`)
+	checkStrEq(t, root.Text(), "barcdata")
+	checkIntEq(t, len(root.Child), 2)
+
+	root.SetText("qux")
+	checkDocEq(t, doc, `<root>qux</root>`)
+	checkStrEq(t, root.Text(), "qux")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.CreateCData("cdata")
+	checkDocEq(t, doc, `<root>qux<![CDATA[cdata]]></root>`)
+	checkStrEq(t, root.Text(), "quxcdata")
+	checkIntEq(t, len(root.Child), 2)
+
+	root.SetCData("baz")
+	checkDocEq(t, doc, `<root><![CDATA[baz]]></root>`)
+	checkStrEq(t, root.Text(), "baz")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.CreateText("corge")
+	root.CreateCData("grault")
+	root.CreateText("waldo")
+	root.CreateCData("fred")
+	root.CreateElement("child")
+	checkDocEq(t, doc, `<root><![CDATA[baz]]>corge<![CDATA[grault]]>waldo<![CDATA[fred]]><child/></root>`)
+	checkStrEq(t, root.Text(), "bazcorgegraultwaldofred")
+	checkIntEq(t, len(root.Child), 6)
+
+	root.SetText("plugh")
+	checkDocEq(t, doc, `<root>plugh<child/></root>`)
+	checkStrEq(t, root.Text(), "plugh")
+	checkIntEq(t, len(root.Child), 2)
+
+	root.SetText("")
+	checkDocEq(t, doc, `<root><child/></root>`)
+	checkStrEq(t, root.Text(), "")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.SetText("")
+	checkDocEq(t, doc, `<root><child/></root>`)
+	checkStrEq(t, root.Text(), "")
+	checkIntEq(t, len(root.Child), 1)
+
+	root.RemoveChildAt(0)
+	root.CreateText("corge")
+	root.CreateCData("grault")
+	root.CreateText("waldo")
+	root.CreateCData("fred")
+	root.CreateElement("child")
+	checkDocEq(t, doc, `<root>corge<![CDATA[grault]]>waldo<![CDATA[fred]]><child/></root>`)
+	checkStrEq(t, root.Text(), "corgegraultwaldofred")
+	checkIntEq(t, len(root.Child), 5)
+
+	root.SetText("")
+	checkDocEq(t, doc, `<root><child/></root>`)
+	checkStrEq(t, root.Text(), "")
+	checkIntEq(t, len(root.Child), 1)
+}
+
+func TestSetTail(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	child := root.CreateElement("child")
+	root.CreateText("\n\t")
+	child.SetText("foo")
+	checkDocEq(t, doc, "<root><child>foo</child>\n\t</root>")
+	checkStrEq(t, child.Tail(), "\n\t")
+	checkIntEq(t, len(root.Child), 2)
+	checkIntEq(t, len(child.Child), 1)
+
+	root.CreateCData("    ")
+	checkDocEq(t, doc, "<root><child>foo</child>\n\t<![CDATA[    ]]></root>")
+	checkStrEq(t, child.Tail(), "\n\t    ")
+	checkIntEq(t, len(root.Child), 3)
+	checkIntEq(t, len(child.Child), 1)
+
+	child.SetTail("")
+	checkDocEq(t, doc, "<root><child>foo</child></root>")
+	checkStrEq(t, child.Tail(), "")
+	checkIntEq(t, len(root.Child), 1)
+	checkIntEq(t, len(child.Child), 1)
+
+	child.SetTail("\t\t\t")
+	checkDocEq(t, doc, "<root><child>foo</child>\t\t\t</root>")
+	checkStrEq(t, child.Tail(), "\t\t\t")
+	checkIntEq(t, len(root.Child), 2)
+	checkIntEq(t, len(child.Child), 1)
+
+	child.SetTail("\t\n\n\t")
+	checkDocEq(t, doc, "<root><child>foo</child>\t\n\n\t</root>")
+	checkStrEq(t, child.Tail(), "\t\n\n\t")
+	checkIntEq(t, len(root.Child), 2)
+	checkIntEq(t, len(child.Child), 1)
+
+	child.SetTail("")
+	checkDocEq(t, doc, "<root><child>foo</child></root>")
+	checkStrEq(t, child.Tail(), "")
+	checkIntEq(t, len(root.Child), 1)
+	checkIntEq(t, len(child.Child), 1)
 }
