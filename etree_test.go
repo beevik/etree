@@ -356,6 +356,7 @@ func TestCopy(t *testing.T) {
 	}
 
 	doc2 := doc.Copy()
+	checkIndexes(t, &doc2.Element)
 	s2, err := doc2.WriteToString()
 	if err != nil {
 		t.Error("etree: incorrect Copy result")

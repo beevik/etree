@@ -288,9 +288,9 @@ func (d *Document) WriteToString() (s string, err error) {
 type indentFunc func(depth int) string
 
 // Indent modifies the document's element tree by inserting character data
-// tokens containing carriage returns and indentation. The amount of
-// indentation per depth level is given as spaces. Pass etree.NoIndent for
-// spaces if you want no indentation at all.
+// tokens containing newlines and indentation. The amount of indentation per
+// depth level is given as spaces. Pass etree.NoIndent for spaces if you want
+// no indentation at all.
 func (d *Document) Indent(spaces int) {
 	var indent indentFunc
 	switch {
@@ -305,8 +305,8 @@ func (d *Document) Indent(spaces int) {
 }
 
 // IndentTabs modifies the document's element tree by inserting CharData
-// entities containing carriage returns and tabs for indentation.  One tab is
-// used per indentation level.
+// tokens containing newlines and tabs for indentation.  One tab is used per
+// indentation level.
 func (d *Document) IndentTabs() {
 	var indent indentFunc
 	switch d.WriteSettings.UseCRLF {
@@ -334,6 +334,7 @@ func newElement(space, tag string, parent *Element) *Element {
 		Attr:   make([]Attr, 0),
 		Child:  make([]Token, 0),
 		parent: parent,
+		index:  -1,
 	}
 	if parent != nil {
 		parent.addChild(e)
@@ -345,8 +346,7 @@ func newElement(space, tag string, parent *Element) *Element {
 // and children. The returned element has no parent but can be parented to a
 // another element using AddElement, or to a document using SetRoot.
 func (e *Element) Copy() *Element {
-	var parent *Element
-	return e.dup(parent).(*Element)
+	return e.dup(nil).(*Element)
 }
 
 // Text returns all character data immediately following the element's opening
@@ -894,6 +894,7 @@ func (e *Element) dup(parent *Element) Token {
 		Attr:   make([]Attr, len(e.Attr)),
 		Child:  make([]Token, len(e.Child)),
 		parent: parent,
+		index:  e.index,
 	}
 	for i, t := range e.Child {
 		ne.Child[i] = t.dup(ne)
@@ -1108,6 +1109,7 @@ func (c *CharData) dup(parent *Element) Token {
 		Data:   c.Data,
 		flags:  c.flags,
 		parent: parent,
+		index:  c.index,
 	}
 }
 
@@ -1193,6 +1195,7 @@ func (c *Comment) dup(parent *Element) Token {
 	return &Comment{
 		Data:   c.Data,
 		parent: parent,
+		index:  c.index,
 	}
 }
 
@@ -1256,6 +1259,7 @@ func (d *Directive) dup(parent *Element) Token {
 	return &Directive{
 		Data:   d.Data,
 		parent: parent,
+		index:  d.index,
 	}
 }
 
@@ -1322,6 +1326,7 @@ func (p *ProcInst) dup(parent *Element) Token {
 		Target: p.Target,
 		Inst:   p.Inst,
 		parent: parent,
+		index:  p.index,
 	}
 }
 
