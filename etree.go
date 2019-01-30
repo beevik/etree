@@ -391,6 +391,16 @@ func (e *Element) findDefaultNamespaceURI() string {
 	return e.parent.findDefaultNamespaceURI()
 }
 
+// hasText returns true if the element has character data immediately
+// folllowing the element's opening tag.
+func (e *Element) hasText() bool {
+	if len(e.Child) == 0 {
+		return false
+	}
+	_, ok := e.Child[0].(*CharData)
+	return ok
+}
+
 // Text returns all character data immediately following the element's opening
 // tag.
 func (e *Element) Text() string {
