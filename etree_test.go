@@ -946,3 +946,90 @@ func TestAttrParent(t *testing.T) {
 		checkElementEq(t, root.Attr[i].Element(), root)
 	}
 }
+
+func TestDefaultNamespaceURI(t *testing.T) {
+	s := `
+<root xmlns="http://root.example.com" a="foo">
+	<child1 xmlns="http://child.example.com" a="foo">
+		<grandchild1 xmlns="http://grandchild.example.com" a="foo">
+		</grandchild1>
+		<grandchild2 a="foo">
+			<greatgrandchild1 a="foo"/>
+		</grandchild2>
+	</child1>
+	<child2 a="foo"/>
+</root>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Error("etree: failed to parse document")
+	}
+
+	root := doc.SelectElement("root")
+	child1 := root.SelectElement("child1")
+	child2 := root.SelectElement("child2")
+	grandchild1 := child1.SelectElement("grandchild1")
+	grandchild2 := child1.SelectElement("grandchild2")
+	greatgrandchild1 := grandchild2.SelectElement("greatgrandchild1")
+
+	checkStrEq(t, doc.NamespaceURI(), "")
+	checkStrEq(t, root.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, child1.NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, child2.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, grandchild1.NamespaceURI(), "http://grandchild.example.com")
+	checkStrEq(t, grandchild2.NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, greatgrandchild1.NamespaceURI(), "http://child.example.com")
+
+	checkStrEq(t, root.Attr[0].NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, child1.Attr[0].NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, child2.Attr[0].NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, grandchild1.Attr[0].NamespaceURI(), "http://grandchild.example.com")
+	checkStrEq(t, grandchild2.Attr[0].NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, greatgrandchild1.Attr[0].NamespaceURI(), "http://child.example.com")
+}
+
+func TestLocalNamespaceURI(t *testing.T) {
+	s := `
+<a:root xmlns:a="http://root.example.com">
+	<b:child1 xmlns:b="http://child.example.com">
+		<c:grandchild1 xmlns:c="http://grandchild.example.com"/>
+		<b:grandchild2>
+			<a:greatgrandchild1/>
+		</b:grandchild2>
+		<a:grandchild3/>
+		<grandchild4/>
+	</b:child1>
+	<a:child2>
+	</a:child2>
+	<child3>
+	</child3>
+</a:root>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Error("etree: failed to parse document")
+	}
+
+	root := doc.SelectElement("root")
+	child1 := root.SelectElement("child1")
+	child2 := root.SelectElement("child2")
+	child3 := root.SelectElement("child3")
+	grandchild1 := child1.SelectElement("grandchild1")
+	grandchild2 := child1.SelectElement("grandchild2")
+	grandchild3 := child1.SelectElement("grandchild3")
+	grandchild4 := child1.SelectElement("grandchild4")
+	greatgrandchild1 := grandchild2.SelectElement("greatgrandchild1")
+
+	checkStrEq(t, doc.NamespaceURI(), "")
+	checkStrEq(t, root.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, child1.NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, child2.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, child3.NamespaceURI(), "")
+	checkStrEq(t, grandchild1.NamespaceURI(), "http://grandchild.example.com")
+	checkStrEq(t, grandchild2.NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, grandchild3.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, grandchild4.NamespaceURI(), "")
+	checkStrEq(t, greatgrandchild1.NamespaceURI(), "http://root.example.com")
+}
