@@ -114,8 +114,9 @@ type Element struct {
 
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
-	Space, Key string // The attribute's namespace and key
-	Value      string // The attribute value string
+	Space, Key string   // The attribute's namespace and key
+	Value      string   // The attribute value string
+	element    *Element // element containing the attribute
 }
 
 // charDataFlags are used with CharData tokens to store additional settings.
@@ -608,7 +609,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		case xml.StartElement:
 			e := newElement(t.Name.Space, t.Name.Local, top)
 			for _, a := range t.Attr {
-				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
+				e.createAttr(a.Name.Space, a.Name.Local, a.Value, e)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -978,31 +979,41 @@ func (e *Element) addChild(t Token) {
 // exists, its value is replaced.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
-	return e.createAttr(space, skey, value)
+	return e.createAttr(space, skey, value, e)
 }
 
 // createAttr is a helper function that creates attributes.
-func (e *Element) createAttr(space, key, value string) *Attr {
+func (e *Element) createAttr(space, key, value string, parent *Element) *Attr {
 	for i, a := range e.Attr {
 		if space == a.Space && key == a.Key {
 			e.Attr[i].Value = value
 			return &e.Attr[i]
 		}
 	}
-	a := Attr{space, key, value}
+	a := Attr{
+		Space:   space,
+		Key:     key,
+		Value:   value,
+		element: parent,
+	}
 	e.Attr = append(e.Attr, a)
 	return &e.Attr[len(e.Attr)-1]
 }
 
-// RemoveAttr removes and returns the first attribute of the element whose key
-// matches the given key. The key may be prefixed by a namespace and a colon.
-// If an equal attribute does not exist, nil is returned.
+// RemoveAttr removes and returns a copy of the first attribute of the element
+// whose key matches the given key. The key may be prefixed by a namespace and
+// a colon. If a matching attribute does not exist, nil is returned.
 func (e *Element) RemoveAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
 		if space == a.Space && skey == a.Key {
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return &a
+			return &Attr{
+				Space:   a.Space,
+				Key:     a.Key,
+				Value:   a.Value,
+				element: nil,
+			}
 		}
 	}
 	return nil
@@ -1029,6 +1040,11 @@ func (a byAttr) Less(i, j int) bool {
 		return strings.Compare(a[i].Key, a[j].Key) < 0
 	}
 	return sp < 0
+}
+
+// Element returns the element containing the attribute.
+func (a *Attr) Element() *Element {
+	return a.element
 }
 
 // writeTo serializes the attribute to the writer.

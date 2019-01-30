@@ -32,6 +32,13 @@ func checkIntEq(t *testing.T, got, want int) {
 	}
 }
 
+func checkElementEq(t *testing.T, got, want *Element) {
+	t.Helper()
+	if got != want {
+		t.Errorf("etree: unexpected element. Got: %v. Wanted: %v.\n", got, want)
+	}
+}
+
 func checkDocEq(t *testing.T, doc *Document, expected string) {
 	t.Helper()
 	doc.Indent(NoIndent)
@@ -911,4 +918,31 @@ func TestSetTail(t *testing.T) {
 	checkStrEq(t, child.Tail(), "")
 	checkIntEq(t, len(root.Child), 1)
 	checkIntEq(t, len(child.Child), 1)
+}
+
+func TestAttrParent(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	attr1 := root.CreateAttr("bar", "1")
+	attr2 := root.CreateAttr("qux", "2")
+
+	checkIntEq(t, len(root.Attr), 2)
+	checkElementEq(t, attr1.Element(), root)
+	checkElementEq(t, attr2.Element(), root)
+
+	attr1 = root.RemoveAttr("bar")
+	attr2 = root.RemoveAttr("qux")
+	checkElementEq(t, attr1.Element(), nil)
+	checkElementEq(t, attr2.Element(), nil)
+
+	s := `<root a="1" b="2" c="3" d="4"/>`
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Error("etree: failed to parse document")
+	}
+
+	root = doc.SelectElement("root")
+	for i := range root.Attr {
+		checkElementEq(t, root.Attr[i].Element(), root)
+	}
 }
