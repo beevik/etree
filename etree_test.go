@@ -987,6 +987,31 @@ func TestDefaultNamespaceURI(t *testing.T) {
 	checkStrEq(t, grandchild1.Attr[0].NamespaceURI(), "http://grandchild.example.com")
 	checkStrEq(t, grandchild2.Attr[0].NamespaceURI(), "http://child.example.com")
 	checkStrEq(t, greatgrandchild1.Attr[0].NamespaceURI(), "http://child.example.com")
+
+	f := doc.FindElements("//*[namespace-uri()='http://root.example.com']")
+	if len(f) != 2 || f[0] != root || f[1] != child2 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='http://child.example.com']")
+	if len(f) != 3 || f[0] != child1 || f[1] != grandchild2 || f[2] != greatgrandchild1 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='http://grandchild.example.com']")
+	if len(f) != 1 || f[0] != grandchild1 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='']")
+	if len(f) != 0 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='foo']")
+	if len(f) != 0 {
+		t.Error("etree: failed namespace-uri test")
+	}
 }
 
 func TestLocalNamespaceURI(t *testing.T) {
@@ -1032,4 +1057,29 @@ func TestLocalNamespaceURI(t *testing.T) {
 	checkStrEq(t, grandchild3.NamespaceURI(), "http://root.example.com")
 	checkStrEq(t, grandchild4.NamespaceURI(), "")
 	checkStrEq(t, greatgrandchild1.NamespaceURI(), "http://root.example.com")
+
+	f := doc.FindElements("//*[namespace-uri()='http://root.example.com']")
+	if len(f) != 4 || f[0] != root || f[1] != child2 || f[2] != grandchild3 || f[3] != greatgrandchild1 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='http://child.example.com']")
+	if len(f) != 2 || f[0] != child1 || f[1] != grandchild2 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='http://grandchild.example.com']")
+	if len(f) != 1 || f[0] != grandchild1 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='']")
+	if len(f) != 2 || f[0] != child3 || f[1] != grandchild4 {
+		t.Error("etree: failed namespace-uri test")
+	}
+
+	f = doc.FindElements("//*[namespace-uri()='foo']")
+	if len(f) != 0 {
+		t.Error("etree: failed namespace-uri test")
+	}
 }

@@ -267,8 +267,8 @@ func (c *compiler) parseSelector(path string) selector {
 }
 
 var fnTable = map[string]struct {
-	hasFn     func(e *Element) bool
-	compareFn func(e *Element) string
+	hasFn    func(e *Element) bool
+	getValFn func(e *Element) string
 }{
 	"text":          {(*Element).hasText, (*Element).Text},
 	"namespace-uri": {nil, (*Element).NamespaceURI},
@@ -298,8 +298,8 @@ func (c *compiler) parseFilter(path string) filter {
 			return newFilterAttrVal(key[1:], value)
 		case strings.HasSuffix(key, "()"):
 			fn := key[:len(key)-2]
-			if t, ok := fnTable[fn]; ok && t.compareFn != nil {
-				return newFilterFuncVal(t.compareFn, value)
+			if t, ok := fnTable[fn]; ok && t.getValFn != nil {
+				return newFilterFuncVal(t.getValFn, value)
 			} else {
 				c.err = ErrPath("path has unknown function " + fn)
 				return nil
