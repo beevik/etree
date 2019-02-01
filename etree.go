@@ -105,7 +105,7 @@ type Document struct {
 
 // An Element represents an XML element, its attributes, and its child tokens.
 type Element struct {
-	Space, Tag string   // namespace and tag
+	Space, Tag string   // namespace prefix and tag
 	Attr       []Attr   // key-value attribute pairs
 	Child      []Token  // child tokens (elements, comments, etc.)
 	parent     *Element // parent element
@@ -114,8 +114,9 @@ type Element struct {
 
 // An Attr represents a key-value attribute of an XML element.
 type Attr struct {
-	Space, Key string // The attribute's namespace and key
-	Value      string // The attribute value string
+	Space, Key string   // The attribute's namespace prefix and key
+	Value      string   // The attribute value string
+	element    *Element // element containing the attribute
 }
 
 // charDataFlags are used with CharData tokens to store additional settings.
@@ -319,7 +320,7 @@ func (d *Document) IndentTabs() {
 }
 
 // NewElement creates an unparented element with the specified tag. The tag
-// may be prefixed by a namespace and a colon.
+// may be prefixed by a namespace prefix and a colon.
 func NewElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	return newElement(space, stag, nil)
@@ -347,6 +348,57 @@ func newElement(space, tag string, parent *Element) *Element {
 // another element using AddElement, or to a document using SetRoot.
 func (e *Element) Copy() *Element {
 	return e.dup(nil).(*Element)
+}
+
+// NamespaceURI returns the XML namespace URI associated with the element. If
+// the element is part of the XML default namespace, NamespaceURI returns the
+// empty string.
+func (e *Element) NamespaceURI() string {
+	if e.Space == "" {
+		return e.findDefaultNamespaceURI()
+	}
+	return e.findLocalNamespaceURI(e.Space)
+}
+
+// findLocalNamespaceURI finds the namespace URI corresponding to the
+// requested prefix.
+func (e *Element) findLocalNamespaceURI(prefix string) string {
+	for _, a := range e.Attr {
+		if a.Space == "xmlns" && a.Key == prefix {
+			return a.Value
+		}
+	}
+
+	if e.parent == nil {
+		return ""
+	}
+
+	return e.parent.findLocalNamespaceURI(prefix)
+}
+
+// findDefaultNamespaceURI finds the default namespace URI of the element.
+func (e *Element) findDefaultNamespaceURI() string {
+	for _, a := range e.Attr {
+		if a.Space == "" && a.Key == "xmlns" {
+			return a.Value
+		}
+	}
+
+	if e.parent == nil {
+		return ""
+	}
+
+	return e.parent.findDefaultNamespaceURI()
+}
+
+// hasText returns true if the element has character data immediately
+// folllowing the element's opening tag.
+func (e *Element) hasText() bool {
+	if len(e.Child) == 0 {
+		return false
+	}
+	_, ok := e.Child[0].(*CharData)
+	return ok
 }
 
 // Text returns all character data immediately following the element's opening
@@ -479,7 +531,7 @@ func (e *Element) findTermCharDataIndex(start int) int {
 
 // CreateElement creates an element with the specified tag and adds it as the
 // last child element of the element e. The tag may be prefixed by a namespace
-// and a colon.
+// prefix and a colon.
 func (e *Element) CreateElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	return newElement(space, stag, e)
@@ -608,7 +660,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		case xml.StartElement:
 			e := newElement(t.Name.Space, t.Name.Local, top)
 			for _, a := range t.Attr {
-				e.createAttr(a.Name.Space, a.Name.Local, a.Value)
+				e.createAttr(a.Name.Space, a.Name.Local, a.Value, e)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -632,7 +684,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 
 // SelectAttr finds an element attribute matching the requested key and
 // returns it if found. Returns nil if no matching attribute is found. The key
-// may be prefixed by a namespace and a colon.
+// may be prefixed by a namespace prefix and a colon.
 func (e *Element) SelectAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
@@ -644,8 +696,8 @@ func (e *Element) SelectAttr(key string) *Attr {
 }
 
 // SelectAttrValue finds an element attribute matching the requested key and
-// returns its value if found. The key may be prefixed by a namespace and a
-// colon. If the key is not found, the dflt value is returned instead.
+// returns its value if found. The key may be prefixed by a namespace prefix
+// and a colon. If the key is not found, the dflt value is returned instead.
 func (e *Element) SelectAttrValue(key, dflt string) string {
 	space, skey := spaceDecompose(key)
 	for _, a := range e.Attr {
@@ -668,8 +720,8 @@ func (e *Element) ChildElements() []*Element {
 }
 
 // SelectElement returns the first child element with the given tag. The tag
-// may be prefixed by a namespace and a colon. Returns nil if no element with
-// a matching tag was found.
+// may be prefixed by a namespace prefix and a colon. Returns nil if no
+// element with a matching tag was found.
 func (e *Element) SelectElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	for _, t := range e.Child {
@@ -681,7 +733,7 @@ func (e *Element) SelectElement(tag string) *Element {
 }
 
 // SelectElements returns a slice of all child elements with the given tag.
-// The tag may be prefixed by a namespace and a colon.
+// The tag may be prefixed by a namespace prefix and a colon.
 func (e *Element) SelectElements(tag string) []*Element {
 	space, stag := spaceDecompose(tag)
 	var elements []*Element
@@ -974,35 +1026,46 @@ func (e *Element) addChild(t Token) {
 }
 
 // CreateAttr creates an attribute and adds it to element e. The key may be
-// prefixed by a namespace and a colon. If an attribute with the key already
-// exists, its value is replaced.
+// prefixed by a namespace prefix and a colon. If an attribute with the key
+// already exists, its value is replaced.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
-	return e.createAttr(space, skey, value)
+	return e.createAttr(space, skey, value, e)
 }
 
 // createAttr is a helper function that creates attributes.
-func (e *Element) createAttr(space, key, value string) *Attr {
+func (e *Element) createAttr(space, key, value string, parent *Element) *Attr {
 	for i, a := range e.Attr {
 		if space == a.Space && key == a.Key {
 			e.Attr[i].Value = value
 			return &e.Attr[i]
 		}
 	}
-	a := Attr{space, key, value}
+	a := Attr{
+		Space:   space,
+		Key:     key,
+		Value:   value,
+		element: parent,
+	}
 	e.Attr = append(e.Attr, a)
 	return &e.Attr[len(e.Attr)-1]
 }
 
-// RemoveAttr removes and returns the first attribute of the element whose key
-// matches the given key. The key may be prefixed by a namespace and a colon.
-// If an equal attribute does not exist, nil is returned.
+// RemoveAttr removes and returns a copy of the first attribute of the element
+// whose key matches the given key. The key may be prefixed by a namespace
+// prefix and a colon. If a matching attribute does not exist, nil is
+// returned.
 func (e *Element) RemoveAttr(key string) *Attr {
 	space, skey := spaceDecompose(key)
 	for i, a := range e.Attr {
 		if space == a.Space && skey == a.Key {
 			e.Attr = append(e.Attr[0:i], e.Attr[i+1:]...)
-			return &a
+			return &Attr{
+				Space:   a.Space,
+				Key:     a.Key,
+				Value:   a.Value,
+				element: nil,
+			}
 		}
 	}
 	return nil
@@ -1029,6 +1092,18 @@ func (a byAttr) Less(i, j int) bool {
 		return strings.Compare(a[i].Key, a[j].Key) < 0
 	}
 	return sp < 0
+}
+
+// Element returns the element containing the attribute.
+func (a *Attr) Element() *Element {
+	return a.element
+}
+
+// NamespaceURI returns the XML namespace URI associated with the attribute.
+// If the element is part of the XML default namespace, NamespaceURI returns
+// empty string.
+func (a *Attr) NamespaceURI() string {
+	return a.element.NamespaceURI()
 }
 
 // writeTo serializes the attribute to the writer.

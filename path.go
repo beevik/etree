@@ -17,22 +17,28 @@ similar to XPath strings, they have a more limited set of selectors and
 filtering options. The following selectors and filters are supported by etree
 paths:
 
-    .               Select the current element.
-    ..              Select the parent of the current element.
-    *               Select all child elements of the current element.
-    /               Select the root element when used at the start of a path.
-    //              Select all descendants of the current element. If used at
-                      the start of a path, select all descendants of the root.
-    tag             Select all child elements with the given tag.
-    [#]             Select the element of the given index (1-based,
-                      negative starts from the end).
-    [@attrib]       Select all elements with the given attribute.
-    [@attrib='val'] Select all elements with the given attribute set to val.
-    [tag]           Select all elements with a child element named tag.
-    [tag='val']     Select all elements with a child element named tag
-                      and text matching val.
-    [text()]        Select all elements with non-empty text.
-    [text()='val']  Select all elements whose text matches val.
+    .                        Select the current element.
+    ..                       Select the parent of the current element.
+    *                        Select all child elements of the current element.
+    /                        Select the root element when used at the start of
+                               a path.
+    //                       Select all descendants of the current element. If
+                               used at the start of a path, select all
+                               descendants of the root.
+    tag                      Select all child elements with the given tag.
+    [#]                      Select the element of the given index (1-based,
+                               negative starts from the end).
+    [@attrib]                Select all elements with the given attribute.
+    [@attrib='val']          Select all elements with the given attribute set
+                               to val.
+    [tag]                    Select all elements with a child element named
+                               tag.
+    [tag='val']              Select all elements with a child element named
+                               tag and text matching val.
+    [text()]                 Select all elements with non-empty text.
+    [text()='val']           Select all elements whose text matches val.
+    [namespace-uri()='val']  Select all elements whose namespace URI matches
+                               val.
 
 Examples:
 
@@ -260,6 +266,14 @@ func (c *compiler) parseSelector(path string) selector {
 	}
 }
 
+var fnTable = map[string]struct {
+	hasFn    func(e *Element) bool
+	getValFn func(e *Element) string
+}{
+	"text":          {(*Element).hasText, (*Element).Text},
+	"namespace-uri": {nil, (*Element).NamespaceURI},
+}
+
 // parseFilter parses a path filter contained within [brackets].
 func (c *compiler) parseFilter(path string) filter {
 	if len(path) == 0 {
@@ -267,7 +281,7 @@ func (c *compiler) parseFilter(path string) filter {
 		return nil
 	}
 
-	// Filter contains [@attr='val'], [text()='val'], or [tag='val']?
+	// Filter contains [@attr='val'], [fn()='val'], or [tag='val']?
 	eqindex := strings.Index(path, "='")
 	if eqindex >= 0 {
 		rindex := nextIndex(path, "'", eqindex+2)
@@ -275,22 +289,38 @@ func (c *compiler) parseFilter(path string) filter {
 			c.err = ErrPath("path has mismatched filter quotes.")
 			return nil
 		}
+
+		key := path[:eqindex]
+		value := path[eqindex+2 : rindex]
+
 		switch {
-		case path[0] == '@':
-			return newFilterAttrVal(path[1:eqindex], path[eqindex+2:rindex])
-		case strings.HasPrefix(path, "text()"):
-			return newFilterTextVal(path[eqindex+2 : rindex])
+		case key[0] == '@':
+			return newFilterAttrVal(key[1:], value)
+		case strings.HasSuffix(key, "()"):
+			fn := key[:len(key)-2]
+			if t, ok := fnTable[fn]; ok && t.getValFn != nil {
+				return newFilterFuncVal(t.getValFn, value)
+			} else {
+				c.err = ErrPath("path has unknown function " + fn)
+				return nil
+			}
 		default:
-			return newFilterChildText(path[:eqindex], path[eqindex+2:rindex])
+			return newFilterChildText(key, value)
 		}
 	}
 
-	// Filter contains [@attr], [N], [tag] or [text()]
+	// Filter contains [@attr], [N], [tag] or [fn()]
 	switch {
 	case path[0] == '@':
 		return newFilterAttr(path[1:])
-	case path == "text()":
-		return newFilterText()
+	case strings.HasSuffix(path, "()"):
+		fn := path[:len(path)-2]
+		if t, ok := fnTable[fn]; ok && t.hasFn != nil {
+			return newFilterFunc(t.hasFn)
+		} else {
+			c.err = ErrPath("path has unknown function " + fn)
+			return nil
+		}
 	case isInteger(path):
 		pos, _ := strconv.Atoi(path)
 		switch {
@@ -448,35 +478,39 @@ func (f *filterAttrVal) apply(p *pather) {
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
-// filterText filters the candidate list for elements having text.
-type filterText struct{}
-
-func newFilterText() *filterText {
-	return &filterText{}
+// filterFunc filters the candidate list for elements satisfying a custom
+// boolean function.
+type filterFunc struct {
+	fn func(e *Element) bool
 }
 
-func (f *filterText) apply(p *pather) {
+func newFilterFunc(fn func(e *Element) bool) *filterFunc {
+	return &filterFunc{fn}
+}
+
+func (f *filterFunc) apply(p *pather) {
 	for _, c := range p.candidates {
-		if c.Text() != "" {
+		if f.fn(c) {
 			p.scratch = append(p.scratch, c)
 		}
 	}
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
 }
 
-// filterTextVal filters the candidate list for elements having
-// text equal to the specified value.
-type filterTextVal struct {
+// filterFuncVal filters the candidate list for elements containing a value
+// matching the result of a custom function.
+type filterFuncVal struct {
+	fn  func(e *Element) string
 	val string
 }
 
-func newFilterTextVal(value string) *filterTextVal {
-	return &filterTextVal{value}
+func newFilterFuncVal(fn func(e *Element) string, value string) *filterFuncVal {
+	return &filterFuncVal{fn, value}
 }
 
-func (f *filterTextVal) apply(p *pather) {
+func (f *filterFuncVal) apply(p *pather) {
 	for _, c := range p.candidates {
-		if c.Text() == f.val {
+		if f.fn(c) == f.val {
 			p.scratch = append(p.scratch, c)
 		}
 	}
