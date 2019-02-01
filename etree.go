@@ -350,6 +350,15 @@ func (e *Element) Copy() *Element {
 	return e.dup(nil).(*Element)
 }
 
+// FullTag returns the element e's complete tag, including namespace prefix if
+// present.
+func (e *Element) FullTag() string {
+	if e.Space == "" {
+		return e.Tag
+	}
+	return e.Space + ":" + e.Tag
+}
+
 // NamespaceURI returns the XML namespace URI associated with the element. If
 // the element is part of the XML default namespace, NamespaceURI returns the
 // empty string.
@@ -983,11 +992,7 @@ func (e *Element) setIndex(index int) {
 // writeTo serializes the element to the writer w.
 func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteByte('<')
-	if e.Space != "" {
-		w.WriteString(e.Space)
-		w.WriteByte(':')
-	}
-	w.WriteString(e.Tag)
+	w.WriteString(e.FullTag())
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
 		a.writeTo(w, s)
@@ -998,20 +1003,12 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 			c.writeTo(w, s)
 		}
 		w.Write([]byte{'<', '/'})
-		if e.Space != "" {
-			w.WriteString(e.Space)
-			w.WriteByte(':')
-		}
-		w.WriteString(e.Tag)
+		w.WriteString(e.FullTag())
 		w.WriteByte('>')
 	} else {
 		if s.CanonicalEndTags {
 			w.Write([]byte{'>', '<', '/'})
-			if e.Space != "" {
-				w.WriteString(e.Space)
-				w.WriteByte(':')
-			}
-			w.WriteString(e.Tag)
+			w.WriteString(e.FullTag())
 			w.WriteByte('>')
 		} else {
 			w.Write([]byte{'/', '>'})
@@ -1094,6 +1091,15 @@ func (a byAttr) Less(i, j int) bool {
 	return sp < 0
 }
 
+// FullKey returns the attribute a's complete key, including namespace prefix
+// if present.
+func (a *Attr) FullKey() string {
+	if a.Space == "" {
+		return a.Key
+	}
+	return a.Space + ":" + a.Key
+}
+
 // Element returns the element containing the attribute.
 func (a *Attr) Element() *Element {
 	return a.element
@@ -1101,18 +1107,14 @@ func (a *Attr) Element() *Element {
 
 // NamespaceURI returns the XML namespace URI associated with the attribute.
 // If the element is part of the XML default namespace, NamespaceURI returns
-// empty string.
+// the empty string.
 func (a *Attr) NamespaceURI() string {
 	return a.element.NamespaceURI()
 }
 
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
-	if a.Space != "" {
-		w.WriteString(a.Space)
-		w.WriteByte(':')
-	}
-	w.WriteString(a.Key)
+	w.WriteString(a.FullKey())
 	w.WriteString(`="`)
 	var m escapeMode
 	if s.CanonicalAttrVal {
