@@ -1,4 +1,4 @@
-// Copyright 2015 Brett Vickers.
+// Copyright 2015-2019 Brett Vickers.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -408,6 +408,16 @@ func (e *Element) hasText() bool {
 	}
 	_, ok := e.Child[0].(*CharData)
 	return ok
+}
+
+// namespacePrefix returns the namespace prefix associated with the element.
+func (e *Element) namespacePrefix() string {
+	return e.Space
+}
+
+// name returns the tag associated with the element.
+func (e *Element) name() string {
+	return e.Tag
 }
 
 // Text returns all character data immediately following the element's opening
