@@ -11,6 +11,16 @@ import (
 	"testing"
 )
 
+func newDocumentFromString(t *testing.T, s string) *Document {
+	t.Helper()
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Error("etree: failed to parse document")
+	}
+	return doc
+}
+
 func checkStrEq(t *testing.T, got, want string) {
 	t.Helper()
 	if got != want {
@@ -29,6 +39,13 @@ func checkIntEq(t *testing.T, got, want int) {
 	t.Helper()
 	if got != want {
 		t.Errorf("etree: unexpected integer. Got: %d. Wanted: %d\n", got, want)
+	}
+}
+
+func checkBoolEq(t *testing.T, got, want bool) {
+	t.Helper()
+	if got != want {
+		t.Errorf("etree: unexpected boolean. Got: %v. Wanted: %v\n", got, want)
 	}
 }
 
@@ -1031,11 +1048,7 @@ func TestLocalNamespaceURI(t *testing.T) {
 	</child3>
 </a:root>`
 
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err != nil {
-		t.Error("etree: failed to parse document")
-	}
+	doc := newDocumentFromString(t, s)
 
 	root := doc.SelectElement("root")
 	child1 := root.SelectElement("child1")
@@ -1082,4 +1095,52 @@ func TestLocalNamespaceURI(t *testing.T) {
 	if len(f) != 0 {
 		t.Error("etree: failed namespace-uri test")
 	}
+}
+
+func TestWhitespace(t *testing.T) {
+	s := "<root>\n\t<child>\n\t\t<grandchild> x</grandchild>\n    </child>\n</root>"
+
+	doc := newDocumentFromString(t, s)
+	root := doc.Root()
+	checkIntEq(t, len(root.Child), 3)
+
+	cd := root.Child[0].(*CharData)
+	checkBoolEq(t, cd.IsWhitespace(), true)
+	checkStrBinaryEq(t, cd.Data, "\n\t")
+
+	cd = root.Child[2].(*CharData)
+	checkBoolEq(t, cd.IsWhitespace(), true)
+	checkStrBinaryEq(t, cd.Data, "\n")
+
+	child := root.SelectElement("child")
+	checkIntEq(t, len(child.Child), 3)
+
+	cd = child.Child[0].(*CharData)
+	checkBoolEq(t, cd.IsWhitespace(), true)
+	checkStrBinaryEq(t, cd.Data, "\n\t\t")
+
+	cd = child.Child[2].(*CharData)
+	checkBoolEq(t, cd.IsWhitespace(), true)
+	checkStrBinaryEq(t, cd.Data, "\n    ")
+
+	grandchild := child.SelectElement("grandchild")
+	checkIntEq(t, len(grandchild.Child), 1)
+
+	cd = grandchild.Child[0].(*CharData)
+	checkBoolEq(t, cd.IsWhitespace(), false)
+
+	cd.SetData(" ")
+	checkBoolEq(t, cd.IsWhitespace(), true)
+
+	cd.SetData("        x")
+	checkBoolEq(t, cd.IsWhitespace(), false)
+
+	cd.SetData("\t\n\r    ")
+	checkBoolEq(t, cd.IsWhitespace(), true)
+
+	cd.SetData("\uFFFD")
+	checkBoolEq(t, cd.IsWhitespace(), false)
+
+	cd.SetData("")
+	checkBoolEq(t, cd.IsWhitespace(), true)
 }

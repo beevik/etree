@@ -58,7 +58,6 @@ func (s *ReadSettings) dup() ReadSettings {
 			entityCopy[k] = v
 		}
 	}
-
 	return ReadSettings{
 		CharsetReader: s.CharsetReader,
 		Permissive:    s.Permissive,
@@ -145,7 +144,7 @@ type Attr struct {
 type charDataFlags uint8
 
 const (
-	// The CharData was created by an indent function as whitespace.
+	// The CharData contains only whitespace.
 	whitespaceFlag charDataFlags = 1 << iota
 
 	// The CharData contains a CDATA section.
@@ -153,7 +152,8 @@ const (
 )
 
 // CharData can be used to represent character data or a CDATA section within
-// an XML document.
+// an XML document. The character's Data property should not be modified
+// directly; use the SetData method instead.
 type CharData struct {
 	Data   string
 	parent *Element
@@ -1220,13 +1220,13 @@ func (e *Element) CreateCharData(data string) *CharData {
 	return newCharData(data, 0, e)
 }
 
-// dup duplicates the character data.
-func (c *CharData) dup(parent *Element) Token {
-	return &CharData{
-		Data:   c.Data,
-		flags:  c.flags,
-		parent: parent,
-		index:  c.index,
+// SetData modifies the text content of the CharData token.
+func (c *CharData) SetData(text string) {
+	c.Data = text
+	if isWhitespace(text) {
+		c.flags |= whitespaceFlag
+	} else {
+		c.flags &= ^whitespaceFlag
 	}
 }
 
@@ -1236,8 +1236,8 @@ func (c *CharData) IsCData() bool {
 	return (c.flags & cdataFlag) != 0
 }
 
-// IsWhitespace returns true if the character data token was created by one of
-// the document Indent methods to contain only whitespace.
+// IsWhitespace returns true if the character data token contains only
+// whitespace.
 func (c *CharData) IsWhitespace() bool {
 	return (c.flags & whitespaceFlag) != 0
 }
@@ -1253,6 +1253,16 @@ func (c *CharData) Parent() *Element {
 // index is -1.
 func (c *CharData) Index() int {
 	return c.index
+}
+
+// dup duplicates the character data.
+func (c *CharData) dup(parent *Element) Token {
+	return &CharData{
+		Data:   c.Data,
+		flags:  c.flags,
+		parent: parent,
+		index:  c.index,
+	}
 }
 
 // setParent replaces the character data token's parent.
