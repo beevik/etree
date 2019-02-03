@@ -49,6 +49,23 @@ func newReadSettings() ReadSettings {
 	}
 }
 
+// dup creates a duplicate of the ReadSettings object.
+func (s *ReadSettings) dup() ReadSettings {
+	var entityCopy map[string]string
+	if s.Entity != nil {
+		entityCopy = make(map[string]string)
+		for k, v := range s.Entity {
+			entityCopy[k] = v
+		}
+	}
+
+	return ReadSettings{
+		CharsetReader: s.CharsetReader,
+		Permissive:    s.Permissive,
+		Entity:        entityCopy,
+	}
+}
+
 // WriteSettings allow for changing the serialization behavior of the WriteTo*
 // methods.
 type WriteSettings struct {
@@ -82,6 +99,11 @@ func newWriteSettings() WriteSettings {
 	}
 }
 
+// dup creates a dulicate of the WriteSettings object.
+func (s *WriteSettings) dup() WriteSettings {
+	return *s
+}
+
 // A Token is an empty interface that represents an Element, CharData,
 // Comment, Directive, or ProcInst.
 type Token interface {
@@ -95,8 +117,8 @@ type Token interface {
 
 // A Document is a container holding a complete XML hierarchy. Its embedded
 // element contains zero or more children, one of which is usually the root
-// element.  The embedded element may include other children such as
-// processing instructions or BOM CharData tokens.
+// element. The embedded element may include other children such as processing
+// instructions or BOM CharData tokens.
 type Document struct {
 	Element
 	ReadSettings  ReadSettings
@@ -164,19 +186,32 @@ type ProcInst struct {
 // NewDocument creates an XML document without a root element.
 func NewDocument() *Document {
 	return &Document{
-		Element{Child: make([]Token, 0)},
-		newReadSettings(),
-		newWriteSettings(),
+		Element:       Element{Child: make([]Token, 0)},
+		ReadSettings:  newReadSettings(),
+		WriteSettings: newWriteSettings(),
 	}
+}
+
+// NewDocumentWithRoot creates an XML document and sets the element e as its
+// root element. If e is already an element of another document, it is removed
+// from its existing document first.
+func NewDocumentWithRoot(e *Element) *Document {
+	d := NewDocument()
+	d.SetRoot(e)
+	return d
 }
 
 // Copy returns a recursive, deep copy of the document.
 func (d *Document) Copy() *Document {
-	return &Document{*(d.dup(nil).(*Element)), d.ReadSettings, d.WriteSettings}
+	return &Document{
+		Element:       *(d.Element.dup(nil).(*Element)),
+		ReadSettings:  d.ReadSettings.dup(),
+		WriteSettings: d.WriteSettings.dup(),
+	}
 }
 
-// Root returns the root element of the document, or nil if there is no root
-// element.
+// Root returns the root element of the document. It returns nil if there is
+// no root element.
 func (d *Document) Root() *Element {
 	for _, t := range d.Child {
 		if c, ok := t.(*Element); ok {
@@ -196,15 +231,14 @@ func (d *Document) SetRoot(e *Element) {
 		e.parent.RemoveChild(e)
 	}
 
-	p := &d.Element
-	e.setParent(p)
-
 	// If there is already a root element, replace it.
+	p := &d.Element
 	for i, t := range p.Child {
 		if _, ok := t.(*Element); ok {
 			t.setParent(nil)
 			t.setIndex(-1)
 			p.Child[i] = e
+			e.setParent(p)
 			e.setIndex(i)
 			return
 		}
@@ -220,9 +254,9 @@ func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	return d.Element.readFrom(r, d.ReadSettings)
 }
 
-// ReadFromFile reads XML from the string s into the document d.
-func (d *Document) ReadFromFile(filename string) error {
-	f, err := os.Open(filename)
+// ReadFromFile reads XML from a local file on disk into the document d.
+func (d *Document) ReadFromFile(filepath string) error {
+	f, err := os.Open(filepath)
 	if err != nil {
 		return err
 	}
@@ -243,8 +277,8 @@ func (d *Document) ReadFromString(s string) error {
 	return err
 }
 
-// WriteTo serializes an XML document into the writer w. It
-// returns the number of bytes written and any error encountered.
+// WriteTo serializes an XML document into the writer w. It returns the number
+// of bytes written and any error encountered.
 func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 	cw := newCountWriter(w)
 	b := bufio.NewWriter(cw)
@@ -255,8 +289,7 @@ func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
-// WriteToFile serializes an XML document into the file named
-// filename.
+// WriteToFile serializes an XML document into the file named filename.
 func (d *Document) WriteToFile(filename string) error {
 	f, err := os.Create(filename)
 	if err != nil {
@@ -267,8 +300,7 @@ func (d *Document) WriteToFile(filename string) error {
 	return err
 }
 
-// WriteToBytes serializes the XML document into a slice of
-// bytes.
+// WriteToBytes serializes the XML document into a slice of bytes.
 func (d *Document) WriteToBytes() (b []byte, err error) {
 	var buf bytes.Buffer
 	if _, err = d.WriteTo(&buf); err != nil {
@@ -345,7 +377,8 @@ func newElement(space, tag string, parent *Element) *Element {
 
 // Copy creates a recursive, deep copy of the element and all its attributes
 // and children. The returned element has no parent but can be parented to a
-// another element using AddElement, or to a document using SetRoot.
+// another element using AddChild, or added to a document with SetRoot or
+// NewDocumentWithRoot.
 func (e *Element) Copy() *Element {
 	return e.dup(nil).(*Element)
 }
@@ -563,8 +596,6 @@ func (e *Element) AddChild(t Token) {
 	if t.Parent() != nil {
 		t.Parent().RemoveChild(t)
 	}
-
-	t.setParent(e)
 	e.addChild(t)
 }
 
@@ -598,8 +629,8 @@ func (e *Element) InsertChild(ex Token, t Token) {
 
 // InsertChildAt inserts the token t into the element e's list of child tokens
 // just before the requested index. If the index is greater than or equal to
-// the length of the list of child tokens, the token t is added to the end of
-// the list.
+// the length of the list of child tokens, then the token t is added to the
+// end of the list.
 func (e *Element) InsertChildAt(index int, t Token) {
 	if index >= len(e.Child) {
 		e.AddChild(t)
@@ -776,12 +807,10 @@ func (e *Element) FindElement(path string) *Element {
 func (e *Element) FindElementPath(path Path) *Element {
 	p := newPather()
 	elements := p.traverse(e, path)
-	switch {
-	case len(elements) > 0:
+	if len(elements) > 0 {
 		return elements[0]
-	default:
-		return nil
 	}
+	return nil
 }
 
 // FindElements returns a slice of elements matched by the XPath-like path
@@ -884,8 +913,8 @@ func (e *Element) GetRelativePath(source *Element) string {
 	return strings.Join(parts, "/")
 }
 
-// indent recursively inserts proper indentation between an
-// XML element's child tokens.
+// indent recursively inserts proper indentation between an XML element's
+// child tokens.
 func (e *Element) indent(depth int, indent indentFunc) {
 	e.stripIndent()
 	n := len(e.Child)
@@ -1028,6 +1057,7 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 
 // addChild adds a child token to the element e.
 func (e *Element) addChild(t Token) {
+	t.setParent(e)
 	t.setIndex(len(e.Child))
 	e.Child = append(e.Child, t)
 }
@@ -1159,7 +1189,7 @@ func NewCharData(data string) *CharData {
 func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	c := &CharData{
 		Data:   data,
-		parent: parent,
+		parent: nil,
 		index:  -1,
 		flags:  flags,
 	}
@@ -1263,7 +1293,7 @@ func NewComment(comment string) *Comment {
 func newComment(comment string, parent *Element) *Comment {
 	c := &Comment{
 		Data:   comment,
-		parent: parent,
+		parent: nil,
 		index:  -1,
 	}
 	if parent != nil {
@@ -1326,7 +1356,7 @@ func NewDirective(data string) *Directive {
 func newDirective(data string, parent *Element) *Directive {
 	d := &Directive{
 		Data:   data,
-		parent: parent,
+		parent: nil,
 		index:  -1,
 	}
 	if parent != nil {
@@ -1392,7 +1422,7 @@ func newProcInst(target, inst string, parent *Element) *ProcInst {
 	p := &ProcInst{
 		Target: target,
 		Inst:   inst,
-		parent: parent,
+		parent: nil,
 		index:  -1,
 	}
 	if parent != nil {
