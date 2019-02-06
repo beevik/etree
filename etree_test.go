@@ -214,7 +214,7 @@ func TestDocument(t *testing.T) {
 	}
 }
 
-func TestDocumentRead_NonUTF8Encodings(t *testing.T) {
+func TestDocumentReadNonUTF8Encodings(t *testing.T) {
 	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
 	<store>
 	<book lang="en">
@@ -233,7 +233,7 @@ func TestDocumentRead_NonUTF8Encodings(t *testing.T) {
 	}
 }
 
-func TestDocumentRead_Permissive(t *testing.T) {
+func TestDocumentReadPermissive(t *testing.T) {
 	s := "<select disabled></select>"
 
 	doc := NewDocument()
@@ -249,7 +249,7 @@ func TestDocumentRead_Permissive(t *testing.T) {
 	}
 }
 
-func TestDocumentRead_HTMLEntities(t *testing.T) {
+func TestDocumentReadHTMLEntities(t *testing.T) {
 	s := `<store>
 	<book lang="en">
 		<title>&rarr;&nbsp;Great Expectations</title>
@@ -368,11 +368,7 @@ func TestCopy(t *testing.T) {
 	</book>
 </store>`
 
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err != nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
+	doc := newDocumentFromString(t, s)
 
 	s1, err := doc.WriteToString()
 	if err != nil {
@@ -410,7 +406,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestGetPath(t *testing.T) {
-	testdoc := `<a>
+	s := `<a>
  <b1>
   <c1>
    <d1/>
@@ -424,11 +420,7 @@ func TestGetPath(t *testing.T) {
  </b2>
 </a>`
 
-	doc := NewDocument()
-	err := doc.ReadFromString(testdoc)
-	if err != nil {
-		t.Fatalf("etree ReadFromString: %v\n", err)
-	}
+	doc := newDocumentFromString(t, s)
 
 	cases := []struct {
 		from    string
@@ -474,17 +466,13 @@ func TestGetPath(t *testing.T) {
 }
 
 func TestInsertChild(t *testing.T) {
-	testdoc := `<book lang="en">
+	s := `<book lang="en">
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
 </book>
 `
 
-	doc := NewDocument()
-	err := doc.ReadFromString(testdoc)
-	if err != nil {
-		t.Fatal("etree ReadFromString: " + err.Error())
-	}
+	doc := newDocumentFromString(t, s)
 
 	year := NewElement("year")
 	year.SetText("1861")
@@ -569,16 +557,12 @@ func TestCdata(t *testing.T) {
 }
 
 func TestAddChild(t *testing.T) {
-	testdoc := `<book lang="en">
+	s := `<book lang="en">
   <t:title>Great Expectations</t:title>
   <author>Charles Dickens</author>
 </book>
 `
-	doc1 := NewDocument()
-	err := doc1.ReadFromString(testdoc)
-	if err != nil {
-		t.Fatal("etree ReadFromString: " + err.Error())
-	}
+	doc1 := newDocumentFromString(t, s)
 
 	doc2 := NewDocument()
 	root := doc2.CreateElement("root")
@@ -604,17 +588,13 @@ func TestAddChild(t *testing.T) {
 }
 
 func TestSetRoot(t *testing.T) {
-	testdoc := `<?test a="wow"?>
+	s := `<?test a="wow"?>
 <book>
   <title>Great Expectations</title>
   <author>Charles Dickens</author>
 </book>
 `
-	doc := NewDocument()
-	err := doc.ReadFromString(testdoc)
-	if err != nil {
-		t.Fatal("etree ReadFromString: " + err.Error())
-	}
+	doc := newDocumentFromString(t, s)
 
 	origroot := doc.Root()
 	if origroot.Parent() != &doc.Element {
@@ -640,7 +620,7 @@ func TestSetRoot(t *testing.T) {
 
 	doc.SetRoot(origroot)
 	doc.Indent(2)
-	expected2 := testdoc
+	expected2 := s
 	s2, _ := doc.WriteToString()
 	checkStrEq(t, s2, expected2)
 
@@ -654,7 +634,7 @@ func TestSetRoot(t *testing.T) {
 
 	doc2.SetRoot(doc.Root())
 	doc2.Indent(2)
-	expected4 := testdoc
+	expected4 := s
 	s4, _ := doc2.WriteToString()
 	checkStrEq(t, s4, expected4)
 
@@ -666,13 +646,8 @@ func TestSetRoot(t *testing.T) {
 }
 
 func TestSortAttrs(t *testing.T) {
-	testdoc := `<el foo='5' Foo='2' aaa='4' สวัสดี='7' AAA='1' a01='3' z='6' a:ZZZ='9' a:AAA='8'/>`
-	doc := NewDocument()
-	err := doc.ReadFromString(testdoc)
-	if err != nil {
-		t.Fatal("etree ReadFromString: " + err.Error())
-	}
-
+	s := `<el foo='5' Foo='2' aaa='4' สวัสดี='7' AAA='1' a01='3' z='6' a:ZZZ='9' a:AAA='8'/>`
+	doc := newDocumentFromString(t, s)
 	doc.Root().SortAttrs()
 	doc.Indent(2)
 	out, _ := doc.WriteToString()
@@ -791,12 +766,7 @@ func TestTokenIndexing(t *testing.T) {
 	</book>
 </store>`
 
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err != nil {
-		t.Error("etree: failed to parse document")
-	}
-
+	doc := newDocumentFromString(t, s)
 	review := doc.FindElement("/store/book/review")
 	review.SetText("Excellent")
 
@@ -977,12 +947,7 @@ func TestDefaultNamespaceURI(t *testing.T) {
 	<child2 a="foo"/>
 </root>`
 
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err != nil {
-		t.Error("etree: failed to parse document")
-	}
-
+	doc := newDocumentFromString(t, s)
 	root := doc.SelectElement("root")
 	child1 := root.SelectElement("child1")
 	child2 := root.SelectElement("child2")
@@ -1049,7 +1014,6 @@ func TestLocalNamespaceURI(t *testing.T) {
 </a:root>`
 
 	doc := newDocumentFromString(t, s)
-
 	root := doc.SelectElement("root")
 	child1 := root.SelectElement("child1")
 	child2 := root.SelectElement("child2")
