@@ -433,16 +433,6 @@ func (e *Element) findDefaultNamespaceURI() string {
 	return e.parent.findDefaultNamespaceURI()
 }
 
-// hasText returns true if the element has character data immediately
-// folllowing the element's opening tag.
-func (e *Element) hasText() bool {
-	if len(e.Child) == 0 {
-		return false
-	}
-	_, ok := e.Child[0].(*CharData)
-	return ok
-}
-
 // namespacePrefix returns the namespace prefix associated with the element.
 func (e *Element) namespacePrefix() string {
 	return e.Space

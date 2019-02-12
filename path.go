@@ -46,7 +46,9 @@ The following function filters are also supported:
     [text()='val']              Keep elements whose text matches val.
     [local-name()='val']        Keep elements whose un-prefixed tag matches val.
     [name()='val']              Keep elements whose full tag exactly matches val.
+    [namespace-prefix()]        Keep elements with non-empty namespace prefixes.
     [namespace-prefix()='val']  Keep elements whose namespace prefix matches val.
+    [namespace-uri()]           Keep elements with non-empty namespace URIs.
     [namespace-uri()='val']     Keep elements whose namespace URI matches val.
 
 Here are some examples of Path strings:
@@ -280,15 +282,12 @@ func (c *compiler) parseSelector(path string) selector {
 	}
 }
 
-var fnTable = map[string]struct {
-	hasFn    func(e *Element) bool
-	getValFn func(e *Element) string
-}{
-	"local-name":       {nil, (*Element).name},
-	"name":             {nil, (*Element).FullTag},
-	"namespace-prefix": {nil, (*Element).namespacePrefix},
-	"namespace-uri":    {nil, (*Element).NamespaceURI},
-	"text":             {(*Element).hasText, (*Element).Text},
+var fnTable = map[string]func(e *Element) string{
+	"local-name":       (*Element).name,
+	"name":             (*Element).FullTag,
+	"namespace-prefix": (*Element).namespacePrefix,
+	"namespace-uri":    (*Element).NamespaceURI,
+	"text":             (*Element).Text,
 }
 
 // parseFilter parses a path filter contained within [brackets].
@@ -314,11 +313,11 @@ func (c *compiler) parseFilter(path string) filter {
 		case key[0] == '@':
 			return newFilterAttrVal(key[1:], value)
 		case strings.HasSuffix(key, "()"):
-			fn := key[:len(key)-2]
-			if t, ok := fnTable[fn]; ok && t.getValFn != nil {
-				return newFilterFuncVal(t.getValFn, value)
+			name := key[:len(key)-2]
+			if fn, ok := fnTable[name]; ok {
+				return newFilterFuncVal(fn, value)
 			}
-			c.err = ErrPath("path has unknown function " + fn)
+			c.err = ErrPath("path has unknown function " + name)
 			return nil
 		default:
 			return newFilterChildText(key, value)
@@ -330,11 +329,11 @@ func (c *compiler) parseFilter(path string) filter {
 	case path[0] == '@':
 		return newFilterAttr(path[1:])
 	case strings.HasSuffix(path, "()"):
-		fn := path[:len(path)-2]
-		if t, ok := fnTable[fn]; ok && t.hasFn != nil {
-			return newFilterFunc(t.hasFn)
+		name := path[:len(path)-2]
+		if fn, ok := fnTable[name]; ok {
+			return newFilterFunc(fn)
 		}
-		c.err = ErrPath("path has unknown function " + fn)
+		c.err = ErrPath("path has unknown function " + name)
 		return nil
 	case isInteger(path):
 		pos, _ := strconv.Atoi(path)
@@ -496,16 +495,16 @@ func (f *filterAttrVal) apply(p *pather) {
 // filterFunc filters the candidate list for elements satisfying a custom
 // boolean function.
 type filterFunc struct {
-	fn func(e *Element) bool
+	fn func(e *Element) string
 }
 
-func newFilterFunc(fn func(e *Element) bool) *filterFunc {
+func newFilterFunc(fn func(e *Element) string) *filterFunc {
 	return &filterFunc{fn}
 }
 
 func (f *filterFunc) apply(p *pather) {
 	for _, c := range p.candidates {
-		if f.fn(c) {
+		if f.fn(c) != "" {
 			p.scratch = append(p.scratch, c)
 		}
 	}

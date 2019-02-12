@@ -37,7 +37,7 @@ var testXML = `
 		<author>James Linn</author>
 		<author>Vaidyanathan Nagarajan</author>
 		<year>2003</year>
-		<p:price>49.99</p:price>
+		<price>49.99</p:price>
 		<editor>
 		</editor>
 	</book>
@@ -66,7 +66,7 @@ var tests = []test{
 	{"./bookstore/book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{"./bookstore/book/author", []string{"Giada De Laurentiis", "J K. Rowling", "James McGovern", "Per Bothner", "Kurt Cagle", "James Linn", "Vaidyanathan Nagarajan", "Erik T. Ray"}},
 	{"./bookstore/book/year", []string{"2005", "2005", "2003", "2003"}},
-	{"./bookstore/book/p:price", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{"./bookstore/book/p:price", []string{"30.00", "29.99", "39.95"}},
 	{"./bookstore/book/isbn", nil},
 
 	// descendant queries
@@ -75,7 +75,7 @@ var tests = []test{
 	{".//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{".//bookstore//title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{".//book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
-	{".//p:price/.", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{".//p:price/.", []string{"30.00", "29.99", "39.95"}},
 	{".//price", []string{"30.00", "29.99", "49.99", "39.95"}},
 
 	// positional queries
@@ -90,7 +90,7 @@ var tests = []test{
 	{"./bookstore/book[-4]/title", "Everyday Italian"},
 	{"./bookstore/book[-5]/title", nil},
 
-	// text queries
+	// text function queries
 	{"./bookstore/book[author='James McGovern']/title", "XQuery Kick Start"},
 	{"./bookstore/book[author='Per Bothner']/title", "XQuery Kick Start"},
 	{"./bookstore/book[author='Kurt Cagle']/title", "XQuery Kick Start"},
@@ -101,6 +101,19 @@ var tests = []test{
 	{"//book/price[text()='29.99']", "29.99"},
 	{"//book/author[text()='Kurt Cagle']", "Kurt Cagle"},
 	{"//book/editor[text()]", []string{"Clarkson Potter", "\n\t\t"}},
+
+	// namespace function queries
+	{"//*[namespace-uri()]", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-uri()='urn:books-com:prices']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-uri()='foo']", nil},
+	{"//*[namespace-prefix()]", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-prefix()='p']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[name()='p:price']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[local-name()='price']", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{"//price[namespace-uri()='']", []string{"49.99"}},
+	{"//price[namespace-prefix()='']", []string{"49.99"}},
+	{"//price[name()='price']", []string{"49.99"}},
+	{"//price[local-name()='price']", []string{"30.00", "29.99", "49.99", "39.95"}},
 
 	// attribute queries
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
