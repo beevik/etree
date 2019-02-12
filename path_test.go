@@ -25,7 +25,6 @@ var testXML = `
 		<author>J K. Rowling</author>
 		<year>2005</year>
 		<p:price>29.99</p:price>
-		<editor></editor>
 		<editor/>
 	</book>
 
@@ -101,6 +100,20 @@ var tests = []test{
 	{"//book/price[text()='29.99']", "29.99"},
 	{"//book/author[text()='Kurt Cagle']", "Kurt Cagle"},
 	{"//book/editor[text()]", []string{"Clarkson Potter", "\n\t\t"}},
+	{"//book[editor]/editor", []string{"Clarkson Potter", "", "\n\t\t"}},
+	
+	// namespace function queries
+	{"//*[namespace-uri()]", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-uri()='urn:books-com:prices']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-uri()='foo']", nil},
+	{"//*[namespace-prefix()]", []string{"30.00", "29.99", "39.95"}},
+	{"//*[namespace-prefix()='p']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[name()='p:price']", []string{"30.00", "29.99", "39.95"}},
+	{"//*[local-name()='price']", []string{"30.00", "29.99", "49.99", "39.95"}},
+	{"//price[namespace-uri()='']", []string{"49.99"}},
+	{"//price[namespace-prefix()='']", []string{"49.99"}},
+	{"//price[name()='price']", []string{"49.99"}},
+	{"//price[local-name()='price']", []string{"30.00", "29.99", "49.99", "39.95"}},
 
 	// namespace function queries
 	{"//*[namespace-uri()]", []string{"30.00", "29.99", "39.95"}},
@@ -120,6 +133,7 @@ var tests = []test{
 	{"./bookstore/book[@path='/books/xml']/title", []string{"Learning XML"}},
 	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
 	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
+	{"./bookstore/book/title[@lang]", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{"./bookstore/book/title[@lang='fr']", nil},
 
 	// parent queries
@@ -136,6 +150,24 @@ var tests = []test{
 	{"/bookstore/book[-1]/title", "Learning XML"},
 	{"/bookstore/book[-4]/title", "Everyday Italian"},
 	{"/bookstore/book[-5]/title", nil},
+
+	// extra-whitespace queries
+	{" / bookstore  / book [ 1 ] / title  ", "Everyday Italian"},
+	{" / bookstore / book[ -5 ] / title ", nil},
+
+	// quotes
+	{".//book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
+	{`.//book[@category="COOKING"]/title[@lang="en"]`, "Everyday Italian"},
+
+	// union queries
+	{"./bookstore/(book[1] | book[1] | book[1])/title", []string{"Everyday Italian"}},
+	{"./bookstore/book[1]/title|author", []string{"Everyday Italian", "Giada De Laurentiis"}},
+	{"./bookstore/book[1] | book[4]/title", []string{"Everyday Italian", "Learning XML"}},
+	{"./bookstore/(book[1]|book[4])/title", []string{"Everyday Italian", "Learning XML"}},
+	{"./bookstore/book[author='Kurt Cagle'|author='James Linn']/title", "XQuery Kick Start"},
+	{"./bookstore/book[(author='Kurt Cagle')|(author='James Linn')]/title", "XQuery Kick Start"},
+	{"./bookstore/book[((author='Kurt Cagle')|(author='James Linn'))]/title", "XQuery Kick Start"},
+	{"./bookstore/book[((author='Kurt Cagle')|author='James Linn')]/title", "XQuery Kick Start"},
 
 	// bad paths
 	{"./bookstore/book[]", errorResult("etree: path contains an empty filter expression.")},
@@ -154,7 +186,7 @@ func TestPath(t *testing.T) {
 	for _, test := range tests {
 		path, err := CompilePath(test.path)
 		if err != nil {
-			if r, ok := test.result.(errorResult); !ok || err.Error() != string(r) {
+			if _, ok := test.result.(errorResult); !ok {
 				fail(t, test)
 			}
 			continue

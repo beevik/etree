@@ -795,7 +795,7 @@ func (e *Element) FindElement(path string) *Element {
 // FindElementPath returns the first element matched by the XPath-like path
 // string. Returns nil if no element is found using the path.
 func (e *Element) FindElementPath(path Path) *Element {
-	p := newPather()
+	p := &pather{}
 	elements := p.traverse(e, path)
 	if len(elements) > 0 {
 		return elements[0]
@@ -811,7 +811,7 @@ func (e *Element) FindElements(path string) []*Element {
 
 // FindElementsPath returns a slice of elements matched by the Path object.
 func (e *Element) FindElementsPath(path Path) []*Element {
-	p := newPather()
+	p := &pather{}
 	return p.traverse(e, path)
 }
 
