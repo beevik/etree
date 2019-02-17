@@ -42,15 +42,22 @@ func ExampleDocument_reading() {
 }
 
 func ExamplePath() {
-	xml := `<bookstore><book><title>Great Expectations</title>
-      <author>Charles Dickens</author></book><book><title>Ulysses</title>
-      <author>James Joyce</author></book></bookstore>`
+	xml := `
+<bookstore>
+	<book>
+		<title>Great Expectations</title>
+		<author>Charles Dickens</author>
+	</book>
+	<book>
+		<title>Ulysses</title>
+		<author>James Joyce</author>
+	</book>
+</bookstore>`
 
 	doc := NewDocument()
 	doc.ReadFromString(xml)
 	for _, e := range doc.FindElements(".//book[author='Charles Dickens']") {
-		doc := NewDocument()
-		doc.SetRoot(e.Copy())
+		doc := NewDocumentWithRoot(e.Copy())
 		doc.Indent(2)
 		doc.WriteTo(os.Stdout)
 	}
