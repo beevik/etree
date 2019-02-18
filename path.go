@@ -19,11 +19,11 @@ be modified by one or more bracket-enclosed "filters". Selectors are used to
 traverse the etree from element to element, while filters are used to narrow
 the list of candidate elements at each node.
 
-Although etree Path strings are similar to XPath strings
-(https://www.w3.org/TR/1999/REC-xpath-19991116/), they have a more limited set
-of selectors and filtering options.
+Although etree Path strings are structurally and behaviorally similar to XPath
+strings (https://www.w3.org/TR/1999/REC-xpath-19991116/), they have a more
+limited set of selectors and filtering options.
 
-The following selectors are supported by etree Path strings:
+The following selectors are supported by etree paths:
 
     .               Select the current element.
     ..              Select the parent of the current element.
@@ -32,7 +32,7 @@ The following selectors are supported by etree Path strings:
     //              Select all descendants of the current element.
     tag             Select all child elements with a name matching the tag.
 
-The following basic filters are supported by etree Path strings:
+The following basic filters are supported:
 
     [@attrib]       Keep elements with an attribute named attrib.
     [@attrib='val'] Keep elements with an attribute named attrib and value matching val.
@@ -40,7 +40,7 @@ The following basic filters are supported by etree Path strings:
     [tag='val']     Keep elements with a child element named tag and text matching val.
     [n]             Keep the n-th element, where n is a numeric index starting from 1.
 
-The following function filters are also supported:
+The following function-based filters are supported:
 
     [text()]                    Keep elements with non-empty text.
     [text()='val']              Keep elements whose text matches val.
@@ -51,35 +51,34 @@ The following function filters are also supported:
     [namespace-uri()]           Keep elements with non-empty namespace URIs.
     [namespace-uri()='val']     Keep elements whose namespace URI matches val.
 
-Here are some examples of Path strings:
+Below are some examples of etree path strings.
 
-- Select the bookstore child element of the root element:
+Select the bookstore child element of the root element:
     /bookstore
 
-- Beginning from the root element, select the title elements of all
-descendant book elements having a 'category' attribute of 'WEB':
+Beginning from the root element, select the title elements of all descendant
+book elements having a 'category' attribute of 'WEB':
     //book[@category='WEB']/title
 
-- Beginning from the current element, select the first descendant
-book element with a title child element containing the text 'Great
-Expectations':
+Beginning from the current element, select the first descendant book element
+with a title child element containing the text 'Great Expectations':
     .//book[title='Great Expectations'][1]
 
-- Beginning from the current element, select all child elements of
-book elements with an attribute 'language' set to 'english':
+Beginning from the current element, select all child elements of book elements
+with an attribute 'language' set to 'english':
     ./book/*[@language='english']
 
-- Beginning from the current element, select all child elements of
-book elements containing the text 'special':
+Beginning from the current element, select all child elements of book elements
+containing the text 'special':
     ./book/*[text()='special']
 
-- Beginning from the current element, select all descendant book
-elements whose title child element has a 'language' attribute of 'french':
+Beginning from the current element, select all descendant book elements whose
+title child element has a 'language' attribute of 'french':
     .//book/title[@language='french']/..
 
-- Beginning from the current element, select all book elements
+Beginning from the current element, select all descendant book elements
 belonging to the http://www.w3.org/TR/html4/ namespace:
-	.//book[namespace-uri()='http://www.w3.org/TR/html4/']
+    .//book[namespace-uri()='http://www.w3.org/TR/html4/']
 
 */
 type Path struct {
@@ -234,7 +233,7 @@ func (c *compiler) parsePath(path string) []segment {
 }
 
 func splitPath(path string) []string {
-	pieces := make([]string, 0)
+	var pieces []string
 	start := 0
 	inquote := false
 	for i := 0; i+1 <= len(path); i++ {
