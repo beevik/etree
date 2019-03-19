@@ -142,6 +142,17 @@ var tests = []test{
 	{"./bookstore/book[@category='WEB'", errorResult("etree: path has invalid filter [brackets].")},
 	{"./bookstore/book[@category='WEB]", errorResult("etree: path has mismatched filter quotes.")},
 	{"./bookstore/book[author]a", errorResult("etree: path has invalid filter [brackets].")},
+
+	// regexps
+	{"./bookstore/book[author~'Kurt.*']/title", "XQuery Kick Start"},
+	{"//book[p:price~'29.*']/title", "Harry Potter"},
+	{"//book[price~'29.*']/title", "Harry Potter"},
+	{"//book/price[text()~'29.*']", "29.99"},
+	{"./bookstore/book/title[@lang~'e.'][@sku~'1.0']", "Harry Potter"},
+
+	// bad regexps
+	{"./bookstore/book/title[@lang~'e[a-z]'][@sku~'1.0']", errorResult("etree: path has invalid filter [brackets].")},
+	{"./bookstore/book/title[@lang~'*e'][@sku~'1.0']", errorResult("etree: path has bad regexp *e")},
 }
 
 func TestPath(t *testing.T) {

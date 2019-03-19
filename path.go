@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -323,6 +324,48 @@ func (c *compiler) parseFilter(path string) filter {
 		}
 	}
 
+	// Filter contains [@attr~'regex'], [fn()~'regex'], or [tag~'regex']?
+	regindex := strings.Index(path, "~'")
+	if regindex >= 0 {
+		rindex := nextIndex(path, "'", regindex+2)
+		if rindex != len(path)-1 {
+			c.err = ErrPath("path has mismatched filter quotes.")
+			return nil
+		}
+
+		key := path[:regindex]
+		value := path[regindex+2 : rindex]
+
+		switch {
+		case key[0] == '@':
+			ret, err := newFilterAttrRegexp(key[1:], value)
+			if err != nil {
+				c.err = ErrPath("path has bad regexp " + value)
+				return nil
+			}
+			return ret
+		case strings.HasSuffix(key, "()"):
+			name := key[:len(key)-2]
+			if fn, ok := fnTable[name]; ok {
+				ret, err := newFilterFuncRegexp(fn, value)
+				if err != nil {
+					c.err = ErrPath("path has bad regexp " + value)
+					return nil
+				}
+				return ret
+			}
+			c.err = ErrPath("path has unknown function " + name)
+			return nil
+		default:
+			ret, err := newFilterChildRegexp(key, value)
+			if err != nil {
+				c.err = ErrPath("path has bad regexp " + value)
+				return nil
+			}
+			return ret
+		}
+	}
+
 	// Filter contains [@attr], [N], [tag] or [fn()]
 	switch {
 	case path[0] == '@':
@@ -574,6 +617,81 @@ func (f *filterChildText) apply(p *pather) {
 				f.text == cc.Text() {
 				p.scratch = append(p.scratch, c)
 			}
+		}
+	}
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
+}
+
+// filterChildRegex filters the candidate list for elements having
+// a child element with the specified tag and matching text.
+type filterChildRegexp struct {
+	space, tag string
+	re *regexp.Regexp
+}
+
+func newFilterChildRegexp(str, text string) (*filterChildRegexp, error) {
+	s, l := spaceDecompose(str)
+	re, err := regexp.Compile(text)
+	return &filterChildRegexp{s, l, re}, err
+}
+
+func (f *filterChildRegexp) apply(p *pather) {
+	for _, c := range p.candidates {
+		for _, cc := range c.Child {
+			if cc, ok := cc.(*Element); ok &&
+				spaceMatch(f.space, cc.Space) &&
+				f.tag == cc.Tag &&
+				f.re.MatchString(cc.Text()) {
+				p.scratch = append(p.scratch, c)
+			}
+		}
+	}
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
+}
+
+// filterAttrRegexp filters the candidate list for elements having
+// the specified attribute matching the specified value.
+type filterAttrRegexp struct {
+	space, key string
+	re *regexp.Regexp
+}
+
+func newFilterAttrRegexp(str, pattern string) (*filterAttrRegexp, error) {
+	s, l := spaceDecompose(str)
+	re, err := regexp.Compile(pattern)
+	return &filterAttrRegexp{s, l, re}, err
+}
+
+func (f *filterAttrRegexp) apply(p *pather) {
+	for _, c := range p.candidates {
+		for _, a := range c.Attr {
+			if spaceMatch(f.space, a.Space) && f.key == a.Key &&
+				f.re.MatchString(a.Value) {
+				p.scratch = append(p.scratch, c)
+				break
+			}
+		}
+	}
+	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
+}
+
+// filterFuncRegexp filters the candidate list for elements containing a value
+// matching the result of a custom function.
+type filterFuncRegexp struct {
+	fn  func(e *Element) string
+	re *regexp.Regexp
+}
+
+func newFilterFuncRegexp(fn func(e *Element) string,
+	pattern string) (*filterFuncRegexp, error) {
+	re, err := regexp.Compile(pattern)
+	return &filterFuncRegexp{fn, re}, err
+}
+
+func (f *filterFuncRegexp) apply(p *pather) {
+	for _, c := range p.candidates {
+		if f.re.MatchString(f.fn(c)) {
+			p.scratch = append(p.scratch, c)
 		}
 	}
 	p.candidates, p.scratch = p.scratch, p.candidates[0:0]
