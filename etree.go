@@ -337,7 +337,7 @@ func (d *Document) Indent(spaces int) {
 	switch {
 	case spaces < 0:
 		indent = func(depth int) string { return "" }
-	case d.WriteSettings.UseCRLF == true:
+	case d.WriteSettings.UseCRLF:
 		indent = func(depth int) string { return indentCRLF(depth*spaces, indentSpaces) }
 	default:
 		indent = func(depth int) string { return indentLF(depth*spaces, indentSpaces) }
@@ -464,7 +464,7 @@ func (e *Element) Text() string {
 			if text == "" {
 				text = cd.Data
 			} else {
-				text = text + cd.Data
+				text += cd.Data
 			}
 		} else {
 			break
@@ -501,7 +501,7 @@ func (e *Element) Tail() string {
 			if text == "" {
 				text = cd.Data
 			} else {
-				text = text + cd.Data
+				text += cd.Data
 			}
 		} else {
 			break
@@ -1003,9 +1003,7 @@ func (e *Element) dup(parent *Element) Token {
 	for i, t := range e.Child {
 		ne.Child[i] = t.dup(ne)
 	}
-	for i, a := range e.Attr {
-		ne.Attr[i] = a
-	}
+	copy(ne.Attr, e.Attr)
 	return ne
 }
 
@@ -1041,7 +1039,7 @@ func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
 		a.writeTo(w, s)
 	}
 	if len(e.Child) > 0 {
-		w.WriteString(">")
+		w.WriteByte('>')
 		for _, c := range e.Child {
 			c.writeTo(w, s)
 		}
