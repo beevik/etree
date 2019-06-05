@@ -211,7 +211,7 @@ type compiler struct {
 func (c *compiler) parsePath(path string) []segment {
 	// If path ends with //, fix it
 	if strings.HasSuffix(path, "//") {
-		path = path + "*"
+		path += "*"
 	}
 
 	var segments []segment
