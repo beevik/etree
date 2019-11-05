@@ -936,12 +936,12 @@ func TestAttrParent(t *testing.T) {
 
 func TestDefaultNamespaceURI(t *testing.T) {
 	s := `
-<root xmlns="http://root.example.com" a="foo">
-	<child1 xmlns="http://child.example.com" a="foo">
-		<grandchild1 xmlns="http://grandchild.example.com" a="foo">
+<root xmlns="https://root.example.com" xmlns:attrib="https://attrib.example.com" attrib:a="foo" b="bar">
+	<child1 xmlns="https://child.example.com" attrib:a="foo">
+		<grandchild1 xmlns="https://grandchild.example.com" a="foo">
 		</grandchild1>
 		<grandchild2 a="foo">
-			<greatgrandchild1 a="foo"/>
+			<greatgrandchild1 attrib:a="foo"/>
 		</grandchild2>
 	</child1>
 	<child2 a="foo"/>
@@ -956,31 +956,36 @@ func TestDefaultNamespaceURI(t *testing.T) {
 	greatgrandchild1 := grandchild2.SelectElement("greatgrandchild1")
 
 	checkStrEq(t, doc.NamespaceURI(), "")
-	checkStrEq(t, root.NamespaceURI(), "http://root.example.com")
-	checkStrEq(t, child1.NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, child2.NamespaceURI(), "http://root.example.com")
-	checkStrEq(t, grandchild1.NamespaceURI(), "http://grandchild.example.com")
-	checkStrEq(t, grandchild2.NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, greatgrandchild1.NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, root.NamespaceURI(), "https://root.example.com")
+	checkStrEq(t, child1.NamespaceURI(), "https://child.example.com")
+	checkStrEq(t, child2.NamespaceURI(), "https://root.example.com")
+	checkStrEq(t, grandchild1.NamespaceURI(), "https://grandchild.example.com")
+	checkStrEq(t, grandchild2.NamespaceURI(), "https://child.example.com")
+	checkStrEq(t, greatgrandchild1.NamespaceURI(), "https://child.example.com")
 
-	checkStrEq(t, root.Attr[0].NamespaceURI(), "http://root.example.com")
-	checkStrEq(t, child1.Attr[0].NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, child2.Attr[0].NamespaceURI(), "http://root.example.com")
-	checkStrEq(t, grandchild1.Attr[0].NamespaceURI(), "http://grandchild.example.com")
-	checkStrEq(t, grandchild2.Attr[0].NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, greatgrandchild1.Attr[0].NamespaceURI(), "http://child.example.com")
+	checkStrEq(t, root.Attr[0].NamespaceURI(), "")
+	checkStrEq(t, root.Attr[1].NamespaceURI(), "")
+	checkStrEq(t, root.Attr[2].NamespaceURI(), "https://attrib.example.com")
+	checkStrEq(t, root.Attr[3].NamespaceURI(), "")
+	checkStrEq(t, child1.Attr[0].NamespaceURI(), "")
+	checkStrEq(t, child1.Attr[1].NamespaceURI(), "https://attrib.example.com")
+	checkStrEq(t, child2.Attr[0].NamespaceURI(), "")
+	checkStrEq(t, grandchild1.Attr[0].NamespaceURI(), "")
+	checkStrEq(t, grandchild1.Attr[1].NamespaceURI(), "")
+	checkStrEq(t, grandchild2.Attr[0].NamespaceURI(), "")
+	checkStrEq(t, greatgrandchild1.Attr[0].NamespaceURI(), "https://attrib.example.com")
 
-	f := doc.FindElements("//*[namespace-uri()='http://root.example.com']")
+	f := doc.FindElements("//*[namespace-uri()='https://root.example.com']")
 	if len(f) != 2 || f[0] != root || f[1] != child2 {
 		t.Error("etree: failed namespace-uri test")
 	}
 
-	f = doc.FindElements("//*[namespace-uri()='http://child.example.com']")
+	f = doc.FindElements("//*[namespace-uri()='https://child.example.com']")
 	if len(f) != 3 || f[0] != child1 || f[1] != grandchild2 || f[2] != greatgrandchild1 {
 		t.Error("etree: failed namespace-uri test")
 	}
 
-	f = doc.FindElements("//*[namespace-uri()='http://grandchild.example.com']")
+	f = doc.FindElements("//*[namespace-uri()='https://grandchild.example.com']")
 	if len(f) != 1 || f[0] != grandchild1 {
 		t.Error("etree: failed namespace-uri test")
 	}
@@ -998,9 +1003,9 @@ func TestDefaultNamespaceURI(t *testing.T) {
 
 func TestLocalNamespaceURI(t *testing.T) {
 	s := `
-<a:root xmlns:a="http://root.example.com">
-	<b:child1 xmlns:b="http://child.example.com">
-		<c:grandchild1 xmlns:c="http://grandchild.example.com"/>
+<a:root xmlns:a="https://root.example.com">
+	<b:child1 xmlns:b="https://child.example.com">
+		<c:grandchild1 xmlns:c="https://grandchild.example.com"/>
 		<b:grandchild2>
 			<a:greatgrandchild1/>
 		</b:grandchild2>
@@ -1025,27 +1030,27 @@ func TestLocalNamespaceURI(t *testing.T) {
 	greatgrandchild1 := grandchild2.SelectElement("greatgrandchild1")
 
 	checkStrEq(t, doc.NamespaceURI(), "")
-	checkStrEq(t, root.NamespaceURI(), "http://root.example.com")
-	checkStrEq(t, child1.NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, child2.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, root.NamespaceURI(), "https://root.example.com")
+	checkStrEq(t, child1.NamespaceURI(), "https://child.example.com")
+	checkStrEq(t, child2.NamespaceURI(), "https://root.example.com")
 	checkStrEq(t, child3.NamespaceURI(), "")
-	checkStrEq(t, grandchild1.NamespaceURI(), "http://grandchild.example.com")
-	checkStrEq(t, grandchild2.NamespaceURI(), "http://child.example.com")
-	checkStrEq(t, grandchild3.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, grandchild1.NamespaceURI(), "https://grandchild.example.com")
+	checkStrEq(t, grandchild2.NamespaceURI(), "https://child.example.com")
+	checkStrEq(t, grandchild3.NamespaceURI(), "https://root.example.com")
 	checkStrEq(t, grandchild4.NamespaceURI(), "")
-	checkStrEq(t, greatgrandchild1.NamespaceURI(), "http://root.example.com")
+	checkStrEq(t, greatgrandchild1.NamespaceURI(), "https://root.example.com")
 
-	f := doc.FindElements("//*[namespace-uri()='http://root.example.com']")
+	f := doc.FindElements("//*[namespace-uri()='https://root.example.com']")
 	if len(f) != 4 || f[0] != root || f[1] != child2 || f[2] != grandchild3 || f[3] != greatgrandchild1 {
 		t.Error("etree: failed namespace-uri test")
 	}
 
-	f = doc.FindElements("//*[namespace-uri()='http://child.example.com']")
+	f = doc.FindElements("//*[namespace-uri()='https://child.example.com']")
 	if len(f) != 2 || f[0] != child1 || f[1] != grandchild2 {
 		t.Error("etree: failed namespace-uri test")
 	}
 
-	f = doc.FindElements("//*[namespace-uri()='http://grandchild.example.com']")
+	f = doc.FindElements("//*[namespace-uri()='https://grandchild.example.com']")
 	if len(f) != 1 || f[0] != grandchild1 {
 		t.Error("etree: failed namespace-uri test")
 	}

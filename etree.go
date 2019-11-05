@@ -1149,10 +1149,13 @@ func (a *Attr) Element() *Element {
 }
 
 // NamespaceURI returns the XML namespace URI associated with this attribute.
-// The function returns the empty string if this attribute is part of the XML
-// default namespace.
+// The function returns the empty string if the attribute is unprefixed or
+// if the attribute is part of the XML default namespace.
 func (a *Attr) NamespaceURI() string {
-	return a.element.NamespaceURI()
+	if a.Space == "" {
+		return ""
+	}
+	return a.element.findLocalNamespaceURI(a.Space)
 }
 
 // writeTo serializes the attribute to the writer.
