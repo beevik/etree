@@ -24,7 +24,7 @@ var testXML = `
 		<title lang="en" sku="150">Harry Potter</title>
 		<author>J K. Rowling</author>
 		<year>2005</year>
-		<p:price>29.99</p:price>
+		<p:price p:tax="1.99">29.99</p:price>
 		<editor></editor>
 		<editor/>
 	</book>
@@ -61,7 +61,6 @@ type test struct {
 type errorResult string
 
 var tests = []test{
-
 	// basic queries
 	{"./bookstore/book/title", []string{"Everyday Italian", "Harry Potter", "XQuery Kick Start", "Learning XML"}},
 	{"./bookstore/book/author", []string{"Giada De Laurentiis", "J K. Rowling", "James McGovern", "Per Bothner", "Kurt Cagle", "James Linn", "Vaidyanathan Nagarajan", "Erik T. Ray"}},
@@ -121,6 +120,10 @@ var tests = []test{
 	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
 	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
 	{"./bookstore/book/title[@lang='fr']", nil},
+	{"//p:price[@p:tax='1.99']", []string{"29.99"}},
+	{"//p:price[@tax='1.99']", []string{"29.99"}},
+	{"//p:price[@p:tax]", []string{"29.99"}},
+	{"//p:price[@tax]", []string{"29.99"}},
 
 	// parent queries
 	{"./bookstore/book[@category='COOKING']/title/../../book[4]/title", "Learning XML"},
