@@ -37,7 +37,7 @@ var testXML = `
 		<author>James Linn</author>
 		<author>Vaidyanathan Nagarajan</author>
 		<year>2003</year>
-		<price>49.99</p:price>
+		<price>49.99</price>
 		<editor>
 		</editor>
 	</book>

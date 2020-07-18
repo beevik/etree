@@ -214,6 +214,29 @@ func TestDocument(t *testing.T) {
 	}
 }
 
+func TestImbalancedXML(t *testing.T) {
+	cases := []string{
+		`<test>`,
+		`</test>`,
+		`<test></test2>`,
+		`<doc xmlns:p="xyz"><p:test></test></doc>`,
+		`<doc xmlns:p="xyz"><test></p:test></doc>`,
+		`<test>malformed`,
+		`malformed</test>`,
+		`<test><test></test>`,
+		`<test></test></test>`,
+		`<test><test></test></test2>`,
+		`<test><test2></test></test2>`,
+	}
+	for _, c := range cases {
+		doc := NewDocument()
+		err := doc.ReadFromString(c)
+		if err == nil {
+			t.Errorf("etree: imbalanced XML should have failed:\n%s", c)
+		}
+	}
+}
+
 func TestDocumentReadNonUTF8Encodings(t *testing.T) {
 	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
 	<store>

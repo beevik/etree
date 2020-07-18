@@ -683,7 +683,7 @@ func (e *Element) RemoveChildAt(index int) Token {
 	return t
 }
 
-// ReadFrom reads XML from the reader ;ri' and stores the result as a new
+// ReadFrom reads XML from the reader 'ri' and stores the result as a new
 // child of this element.
 func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err error) {
 	r := newCountReader(ri)
@@ -697,6 +697,9 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		t, err := dec.RawToken()
 		switch {
 		case err == io.EOF:
+			if len(stack.data) != 1 {
+				return r.bytes, ErrXML
+			}
 			return r.bytes, nil
 		case err != nil:
 			return r.bytes, err
@@ -714,6 +717,9 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			}
 			stack.push(e)
 		case xml.EndElement:
+			if top.Tag != t.Name.Local || top.Space != t.Name.Space {
+				return r.bytes, ErrXML
+			}
 			stack.pop()
 		case xml.CharData:
 			data := string(t)
