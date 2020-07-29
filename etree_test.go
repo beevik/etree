@@ -81,6 +81,101 @@ func checkIndexes(t *testing.T, e *Element) {
 	}
 }
 
+func TestElementIsEquivalent(t *testing.T) {
+
+	s := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<author>Charles Dickens</author>
+		<id>0</id>
+			<level1>
+			<level2>
+				<level3>
+					<level4>
+						<level5>
+							<level6>FirstBook</level6>
+						</level5>
+					</level4>
+				</level3>
+			</level2>
+		</level1>	
+	</book>
+	<book lang="en">
+		<title>Oliver Twist</title>
+		<author>Charles Dickens</author>
+		<id>1</id>
+		<level1>
+			<level2>
+				<level3>
+					<level4>
+						<level5>
+							<level6>SecondBook</level6>
+						</level5>
+					</level4>
+				</level3>
+			</level2>
+		</level1>	
+	</book>
+</store>`
+
+	doc := newDocumentFromString(t, s)
+
+	e1 := doc.FindElement("./")
+	e2 := doc.FindElement("./")
+
+	b := e1.IsEquivalent(e2)
+
+	if b != true {
+		t.Errorf("etree: IsEquivalent should have returned %v but it was %v",true, b)
+	}
+
+	s2 := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<author>Charles Dickens</author>
+		<id>0</id>
+			<level1>
+			<level2>
+				<level3>
+					<level4 attr="randomAttrValue">
+						<level5>
+							<level6>FirstBook</level6>
+						</level5>
+					</level4>
+				</level3>
+			</level2>
+		</level1>	
+	</book>
+	<book lang="en">
+		<title>Oliver Twist</title>
+		<author>Charles Dickens</author>
+		<id>1</id>
+		<level1>
+			<level2>
+				<level3>
+					<level4>
+						<level5>
+							<level6>SecondBook</level6>
+						</level5>
+					</level4>
+				</level3>
+			</level2>
+		</level1>	
+	</book>
+</store>`
+
+	doc2 := newDocumentFromString(t, s2)
+
+	e2 = doc2.FindElement("./")
+
+	b = e1.IsEquivalent(e2)
+
+	if b != false {
+		t.Errorf("etree: IsEquivalent should have returned %v but it was %v",false, b)
+	}
+}
+
+
 func TestDocument(t *testing.T) {
 	// Create a document
 	doc := NewDocument()

@@ -21,6 +21,7 @@ const (
 	// NoIndent is used with the Document Indent function to disable all
 	// indenting.
 	NoIndent = -1
+	WrongValueFound      = ">~<WRONG_VALUE_FOUND>~<"
 )
 
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
@@ -1463,6 +1464,50 @@ func newProcInst(target, inst string, parent *Element) *ProcInst {
 // child token of this element.
 func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 	return newProcInst(target, inst, e)
+}
+
+// IsEquivalent compares recursively in deep all the child elements of both e and e2 and returns a boolean that
+// indicates if both elements are equivalent.
+func (e *Element) IsEquivalent(e2 *Element) (equals bool) {
+	if e != nil && e2 != nil {
+		elemChilds1 := e.ChildElements()
+		elemChilds2 := e2.ChildElements()
+
+		if elemChilds1 == nil && elemChilds2 == nil {
+			return true
+		}
+		if (elemChilds1 == nil && elemChilds2 != nil) || (elemChilds1 != nil && elemChilds2 == nil) {
+			return false
+		}
+		if len(elemChilds1) != len(elemChilds2) {
+			return false
+		}
+
+		for i, child := range elemChilds1 {
+			secondChild := elemChilds2[i]
+			equals = child.IsEquivalent(secondChild)
+			if !equals {
+				return false
+			}
+		}
+
+		for i, elem := range elemChilds1 {
+			secondChild := elemChilds2[i]
+			if elem.Text() != secondChild.Text() || len(elem.Attr) != len(secondChild.Attr) {
+				return false
+			}
+
+			for _, att := range elem.Attr {
+				secondElemAttValue := secondChild.SelectAttrValue(att.Key, WrongValueFound)
+				if secondElemAttValue == WrongValueFound || secondElemAttValue != att.Value {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return false
+
 }
 
 // dup duplicates the procinst.
