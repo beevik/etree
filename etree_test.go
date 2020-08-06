@@ -81,6 +81,66 @@ func checkIndexes(t *testing.T, e *Element) {
 	}
 }
 
+func TestElementIsEquivalent(t *testing.T) {
+
+	s := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<level1>
+			<level2>
+			</level2>
+		</level1>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	s2 := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<level1>
+			<level2>
+
+			</level2>
+		</level1>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	doc := newDocumentFromString(t, s)
+	doc2 := newDocumentFromString(t, s2)
+
+	e1 := doc.FindElement("./")
+	e2 := doc2.FindElement("./")
+
+	b := e1.IsEquivalent(e2)
+
+	if b != true {
+		t.Errorf("etree: IsEquivalent should have returned %v but it was %v",true, b)
+	}
+
+	s2 = `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<level1 attr="randomAttribute">
+			<level2>
+			</level2>
+		</level1>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	doc2 = newDocumentFromString(t, s2)
+
+	e2 = doc2.FindElement("./")
+
+	b = e1.IsEquivalent(e2)
+
+	if b != false {
+		t.Errorf("etree: IsEquivalent should have returned %v but it was %v",false, b)
+	}
+}
+
+
 func TestDocument(t *testing.T) {
 	// Create a document
 	doc := NewDocument()
