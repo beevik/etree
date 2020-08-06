@@ -1470,30 +1470,30 @@ func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 // indicates if both elements are equivalent.
 func (e *Element) IsEquivalent(e2 *Element) (equals bool) {
 	if e != nil && e2 != nil {
-		elemChilds1 := e.ChildElements()
-		elemChilds2 := e2.ChildElements()
+		children1 := e.ChildElements()
+		children2 := e2.ChildElements()
 
-		if elemChilds1 == nil && elemChilds2 == nil {
+		if children1 == nil && children2 == nil {
 			return true
 		}
-		if (elemChilds1 == nil && elemChilds2 != nil) || (elemChilds1 != nil && elemChilds2 == nil) {
+		if (children1 == nil && children2 != nil) || (children1 != nil && children2 == nil) {
 			return false
 		}
-		if len(elemChilds1) != len(elemChilds2) {
+		if len(children1) != len(children2) {
 			return false
 		}
 
-		for i, child := range elemChilds1 {
-			secondChild := elemChilds2[i]
+		for i, child := range children1 {
+			secondChild := children2[i]
 			equals = child.IsEquivalent(secondChild)
 			if !equals {
 				return false
 			}
 		}
 
-		for i, elem := range elemChilds1 {
-			secondChild := elemChilds2[i]
-			if elem.Text() != secondChild.Text() || len(elem.Attr) != len(secondChild.Attr) {
+		for i, elem := range children1 {
+			secondChild := children2[i]
+			if strings.TrimSpace(elem.Text()) != strings.TrimSpace(secondChild.Text()) || len(elem.Attr) != len(secondChild.Attr) {
 				return false
 			}
 

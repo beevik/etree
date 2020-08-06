@@ -86,42 +86,31 @@ func TestElementIsEquivalent(t *testing.T) {
 	s := `<store>
 	<book lang="en">
 		<title>Great Expectations</title>
-		<author>Charles Dickens</author>
-		<id>0</id>
-			<level1>
-			<level2>
-				<level3>
-					<level4>
-						<level5>
-							<level6>FirstBook</level6>
-						</level5>
-					</level4>
-				</level3>
-			</level2>
-		</level1>	
-	</book>
-	<book lang="en">
-		<title>Oliver Twist</title>
-		<author>Charles Dickens</author>
-		<id>1</id>
 		<level1>
 			<level2>
-				<level3>
-					<level4>
-						<level5>
-							<level6>SecondBook</level6>
-						</level5>
-					</level4>
-				</level3>
 			</level2>
-		</level1>	
+		</level1>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+	s2 := `<store>
+	<book lang="en">
+		<title>Great Expectations</title>
+		<level1>
+			<level2>
+
+			</level2>
+		</level1>
+		<author>Charles Dickens</author>
 	</book>
 </store>`
 
 	doc := newDocumentFromString(t, s)
+	doc2 := newDocumentFromString(t, s2)
 
 	e1 := doc.FindElement("./")
-	e2 := doc.FindElement("./")
+	e2 := doc2.FindElement("./")
 
 	b := e1.IsEquivalent(e2)
 
@@ -129,42 +118,18 @@ func TestElementIsEquivalent(t *testing.T) {
 		t.Errorf("etree: IsEquivalent should have returned %v but it was %v",true, b)
 	}
 
-	s2 := `<store>
+	s2 = `<store>
 	<book lang="en">
 		<title>Great Expectations</title>
-		<author>Charles Dickens</author>
-		<id>0</id>
-			<level1>
+		<level1 attr="randomAttribute">
 			<level2>
-				<level3>
-					<level4 attr="randomAttrValue">
-						<level5>
-							<level6>FirstBook</level6>
-						</level5>
-					</level4>
-				</level3>
 			</level2>
-		</level1>	
-	</book>
-	<book lang="en">
-		<title>Oliver Twist</title>
+		</level1>
 		<author>Charles Dickens</author>
-		<id>1</id>
-		<level1>
-			<level2>
-				<level3>
-					<level4>
-						<level5>
-							<level6>SecondBook</level6>
-						</level5>
-					</level4>
-				</level3>
-			</level2>
-		</level1>	
 	</book>
 </store>`
 
-	doc2 := newDocumentFromString(t, s2)
+	doc2 = newDocumentFromString(t, s2)
 
 	e2 = doc2.FindElement("./")
 
