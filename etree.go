@@ -107,6 +107,14 @@ type WriteSettings struct {
 	UseCRLF bool
 }
 
+// XMLWriter is a Writer that also has convenience methods for writing
+// strings an single bytes.
+type XMLWriter interface {
+	io.StringWriter
+	io.ByteWriter
+	io.Writer
+}
+
 // newWriteSettings creates a default WriteSettings record.
 func newWriteSettings() WriteSettings {
 	return WriteSettings{
@@ -166,10 +174,10 @@ func NewIndentSettings() IndentSettings {
 type Token interface {
 	Parent() *Element
 	Index() int
+	WriteTo(w XMLWriter, s *WriteSettings)
 	dup(parent *Element) Token
 	setParent(parent *Element)
 	setIndex(index int)
-	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
 // A Document is a container holding a complete XML tree.
@@ -347,7 +355,7 @@ func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
 	xw := newXmlWriter(w)
 	b := bufio.NewWriter(xw)
 	for _, c := range d.Child {
-		c.writeTo(b, &d.WriteSettings)
+		c.WriteTo(b, &d.WriteSettings)
 	}
 	err, n = b.Flush(), xw.bytes
 	return
@@ -1155,18 +1163,18 @@ func (e *Element) setIndex(index int) {
 	e.index = index
 }
 
-// writeTo serializes the element to the writer w.
-func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serializes the element to the writer w.
+func (e *Element) WriteTo(w XMLWriter, s *WriteSettings) {
 	w.WriteByte('<')
 	w.WriteString(e.FullTag())
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
-		a.writeTo(w, s)
+		a.WriteTo(w, s)
 	}
 	if len(e.Child) > 0 {
 		w.WriteByte('>')
 		for _, c := range e.Child {
-			c.writeTo(w, s)
+			c.WriteTo(w, s)
 		}
 		w.Write([]byte{'<', '/'})
 		w.WriteString(e.FullTag())
@@ -1283,8 +1291,8 @@ func (a *Attr) NamespaceURI() string {
 	return a.element.findLocalNamespaceURI(a.Space)
 }
 
-// writeTo serializes the attribute to the writer.
-func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serializes the attribute to the writer.
+func (a *Attr) WriteTo(w XMLWriter, s *WriteSettings) {
 	w.WriteString(a.FullKey())
 	if s.AttrSingleQuote {
 		w.WriteString(`='`)
@@ -1420,8 +1428,8 @@ func (c *CharData) setIndex(index int) {
 	c.index = index
 }
 
-// writeTo serializes character data to the writer.
-func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serializes character data to the writer.
+func (c *CharData) WriteTo(w XMLWriter, s *WriteSettings) {
 	if c.IsCData() {
 		w.WriteString(`<![CDATA[`)
 		w.WriteString(c.Data)
@@ -1493,8 +1501,8 @@ func (c *Comment) setIndex(index int) {
 	c.index = index
 }
 
-// writeTo serialies the comment to the writer.
-func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serialies the comment to the writer.
+func (c *Comment) WriteTo(w XMLWriter, s *WriteSettings) {
 	w.WriteString("<!--")
 	w.WriteString(c.Data)
 	w.WriteString("-->")
@@ -1558,8 +1566,8 @@ func (d *Directive) setIndex(index int) {
 	d.index = index
 }
 
-// writeTo serializes the XML directive to the writer.
-func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serializes the XML directive to the writer.
+func (d *Directive) WriteTo(w XMLWriter, s *WriteSettings) {
 	w.WriteString("<!")
 	w.WriteString(d.Data)
 	w.WriteString(">")
@@ -1626,8 +1634,8 @@ func (p *ProcInst) setIndex(index int) {
 	p.index = index
 }
 
-// writeTo serializes the processing instruction to the writer.
-func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings) {
+// WriteTo serializes the processing instruction to the writer.
+func (p *ProcInst) WriteTo(w XMLWriter, s *WriteSettings) {
 	w.WriteString("<?")
 	w.WriteString(p.Target)
 	if p.Inst != "" {
