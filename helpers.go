@@ -5,7 +5,6 @@
 package etree
 
 import (
-	"bufio"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -211,7 +210,7 @@ const (
 )
 
 // escapeString writes an escaped version of a string to the writer.
-func escapeString(w *bufio.Writer, s string, m escapeMode) {
+func escapeString(w XMLWriter, s string, m escapeMode) {
 	var esc []byte
 	last := 0
 	for i := 0; i < len(s); {
