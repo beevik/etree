@@ -7,6 +7,8 @@ package etree
 import (
 	"encoding/xml"
 	"io"
+	"os"
+	"path"
 	"strings"
 	"testing"
 )
@@ -1135,4 +1137,21 @@ func TestWhitespace(t *testing.T) {
 
 	cd.SetData("")
 	checkBoolEq(t, cd.IsWhitespace(), true)
+}
+
+func TestReadEmptyXML(t *testing.T) {
+	tempdir := t.TempDir()
+	emptyFile := path.Join(tempdir, "empty.xml")
+
+	f, err := os.Create(emptyFile)
+	if err != nil {
+		t.Fatal("failed to create empty file")
+	}
+	f.Close()
+
+	doc := NewDocument()
+	err = doc.ReadFromFile(emptyFile)
+	if err == nil {
+		t.Error("etree: expected error because empty XML file parsed")
+	}
 }
