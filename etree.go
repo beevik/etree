@@ -23,8 +23,12 @@ const (
 	NoIndent = -1
 )
 
-// ErrXML is returned when XML parsing fails due to incorrect formatting.
-var ErrXML = errors.New("etree: invalid XML format")
+var (
+	// ErrXML is returned when XML parsing fails due to incorrect formatting.
+	ErrXML = errors.New("etree: invalid XML format")
+	// ErrEmptyFile is returned when the XML parsing encounters an empty XML file.
+	ErrEmptyFile = errors.New("etree: empty XML file")
+)
 
 // ReadSettings determine the default behavior of the Document's ReadFrom*
 // methods.
@@ -269,8 +273,14 @@ func (d *Document) ReadFromFile(filepath string) error {
 		return err
 	}
 	defer f.Close()
-	_, err = d.ReadFrom(f)
-	return err
+	nr, err := d.ReadFrom(f)
+	if err != nil {
+		return err
+	}
+	if nr == 0 {
+		return ErrEmptyFile
+	}
+	return nil
 }
 
 // ReadFromBytes reads XML from the byte slice 'b' into the this document.
