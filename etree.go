@@ -803,6 +803,30 @@ func (e *Element) SelectElements(tag string) []*Element {
 	return elements
 }
 
+// SelectProcInst returns the first processing instruction with the given 'target'
+// (i.e., name). The function returns nil if no processing instruction
+// matching the target is found.
+func (e *Element) SelectProcInst(target string) *ProcInst {
+	for _, t := range e.Child {
+		if c, ok := t.(*ProcInst); ok && target == c.Target {
+			return c
+		}
+	}
+	return nil
+}
+
+// SelectProcInsts returns a slice of all processing instructions
+// with the given 'target' (i.e., name).
+func (e *Element) SelectProcInsts(target string) []*ProcInst {
+	var elements []*ProcInst
+	for _, t := range e.Child {
+		if c, ok := t.(*ProcInst); ok && target == c.Target {
+			elements = append(elements, c)
+		}
+	}
+	return elements
+}
+
 // FindElement returns the first element matched by the XPath-like 'path'
 // string. The function returns nil if no child element is found using the
 // path. It panics if an invalid path string is supplied.
