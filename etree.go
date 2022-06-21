@@ -766,6 +766,17 @@ func (e *Element) SelectAttrValue(key, dflt string) string {
 	return dflt
 }
 
+// ChildProcInsts returns all processing instructions that are children of this element.
+func (e *Element) ChildProcInsts() []*ProcInst {
+	var procinsts []*ProcInst
+	for _, t := range e.Child {
+		if c, ok := t.(*ProcInst); ok {
+			procinsts = append(procinsts, c)
+		}
+	}
+	return procinsts
+}
+
 // ChildElements returns all elements that are children of this element.
 func (e *Element) ChildElements() []*Element {
 	var elements []*Element
