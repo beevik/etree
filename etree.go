@@ -99,7 +99,7 @@ func newWriteSettings() WriteSettings {
 	}
 }
 
-// dup creates a dulicate of the WriteSettings object.
+// dup creates a duplicate of the WriteSettings object.
 func (s *WriteSettings) dup() WriteSettings {
 	return *s
 }
@@ -1459,7 +1459,7 @@ func newProcInst(target, inst string, parent *Element) *ProcInst {
 }
 
 // CreateProcInst creates an XML processing instruction token with the
-// sepcified 'target' and instruction 'inst'. It is then added as the last
+// specified 'target' and instruction 'inst'. It is then added as the last
 // child token of this element.
 func (e *Element) CreateProcInst(target, inst string) *ProcInst {
 	return newProcInst(target, inst, e)
