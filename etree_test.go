@@ -256,6 +256,25 @@ func TestDocumentReadNonUTF8Encodings(t *testing.T) {
 	}
 }
 
+func TestPreserveCDATA(t *testing.T) {
+	s := `<name><![CDATA[My <b>name</b> is]]></name>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Fatalf("etree: failed to ReadFromString: %v", err)
+	}
+
+	result, err := doc.WriteToString()
+	if err != nil {
+		t.Fatalf("etree: failed to WriteToString: %v", err)
+	}
+
+	if result != s {
+		t.Errorf("etree: wanted %q, got %q", s, result)
+	}
+}
+
 func TestDocumentReadPermissive(t *testing.T) {
 	s := "<select disabled></select>"
 
