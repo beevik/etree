@@ -320,24 +320,27 @@ func TestEscapeCodes(t *testing.T) {
 		e.SetText(c.input)
 		e.CreateAttr("a", c.input)
 
-		doc.WriteSettings.CanonicalText = false
-		doc.WriteSettings.CanonicalAttrVal = false
+		writer := NewStandardXmlWriter()
+		doc.Writer = writer
+
+		writer.Settings.CanonicalText = false
+		writer.Settings.CanonicalAttrVal = false
 		s, err := doc.WriteToString()
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
 		}
 		checkStrEq(t, s, c.normal)
 
-		doc.WriteSettings.CanonicalText = false
-		doc.WriteSettings.CanonicalAttrVal = true
+		writer.Settings.CanonicalText = false
+		writer.Settings.CanonicalAttrVal = true
 		s, err = doc.WriteToString()
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
 		}
 		checkStrEq(t, s, c.attrCanonical)
 
-		doc.WriteSettings.CanonicalText = true
-		doc.WriteSettings.CanonicalAttrVal = false
+		writer.Settings.CanonicalText = true
+		writer.Settings.CanonicalAttrVal = false
 		s, err = doc.WriteToString()
 		if err != nil {
 			t.Error("etree: Escape test produced inocrrect result.")
@@ -350,9 +353,10 @@ func TestCanonical(t *testing.T) {
 	BOM := "\xef\xbb\xbf"
 
 	doc := NewDocument()
-	doc.WriteSettings.CanonicalEndTags = true
-	doc.WriteSettings.CanonicalText = true
-	doc.WriteSettings.CanonicalAttrVal = true
+	writer := doc.Writer.(*StandardWriter)
+	writer.Settings.CanonicalEndTags = true
+	writer.Settings.CanonicalText = true
+	writer.Settings.CanonicalAttrVal = true
 	doc.CreateCharData(BOM)
 	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
 
@@ -747,7 +751,8 @@ func TestIndentSettings(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		doc.WriteSettings.UseCRLF = test.useCRLF
+		writer := doc.Writer.(*StandardWriter)
+		writer.Settings.UseCRLF = test.useCRLF
 		if test.useTabs {
 			doc.IndentTabs()
 			s, err := doc.WriteToString()

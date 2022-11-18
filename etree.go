@@ -7,7 +7,6 @@
 package etree
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/xml"
 	"errors"
@@ -113,7 +112,6 @@ type Token interface {
 	dup(parent *Element) Token
 	setParent(parent *Element)
 	setIndex(index int)
-	writeTo(w *bufio.Writer, s *WriteSettings)
 }
 
 // A Document is a container holding a complete XML tree.
@@ -128,8 +126,8 @@ type Token interface {
 // the document is deserialized, serialized, and indented.
 type Document struct {
 	Element
-	ReadSettings  ReadSettings
-	WriteSettings WriteSettings
+	ReadSettings ReadSettings
+	Writer       XmlWriter
 }
 
 // An Element represents an XML element, its attributes, and its child tokens.
@@ -194,9 +192,9 @@ type ProcInst struct {
 // NewDocument creates an XML document without a root element.
 func NewDocument() *Document {
 	return &Document{
-		Element:       Element{Child: make([]Token, 0)},
-		ReadSettings:  newReadSettings(),
-		WriteSettings: newWriteSettings(),
+		Element:      Element{Child: make([]Token, 0)},
+		ReadSettings: newReadSettings(),
+		Writer:       NewStandardXmlWriter(),
 	}
 }
 
@@ -212,9 +210,9 @@ func NewDocumentWithRoot(e *Element) *Document {
 // Copy returns a recursive, deep copy of the document.
 func (d *Document) Copy() *Document {
 	return &Document{
-		Element:       *(d.Element.dup(nil).(*Element)),
-		ReadSettings:  d.ReadSettings.dup(),
-		WriteSettings: d.WriteSettings.dup(),
+		Element:      *(d.Element.dup(nil).(*Element)),
+		ReadSettings: d.ReadSettings.dup(),
+		Writer:       d.Writer.Clone(),
 	}
 }
 
@@ -288,13 +286,7 @@ func (d *Document) ReadFromString(s string) error {
 // WriteTo serializes the document out to the writer 'w'. The function returns
 // the number of bytes written and any error encountered.
 func (d *Document) WriteTo(w io.Writer) (n int64, err error) {
-	cw := newCountWriter(w)
-	b := bufio.NewWriter(cw)
-	for _, c := range d.Child {
-		c.writeTo(b, &d.WriteSettings)
-	}
-	err, n = b.Flush(), cw.bytes
-	return
+	return d.Writer.WriteTo(d, w)
 }
 
 // WriteToFile serializes the document out to the file at path 'filepath'.
@@ -333,30 +325,14 @@ type indentFunc func(depth int) string
 // depth level is given by the 'spaces' parameter. Pass etree.NoIndent for
 // 'spaces' if you want no indentation at all.
 func (d *Document) Indent(spaces int) {
-	var indent indentFunc
-	switch {
-	case spaces < 0:
-		indent = func(depth int) string { return "" }
-	case d.WriteSettings.UseCRLF:
-		indent = func(depth int) string { return indentCRLF(depth*spaces, indentSpaces) }
-	default:
-		indent = func(depth int) string { return indentLF(depth*spaces, indentSpaces) }
-	}
-	d.Element.indent(0, indent)
+	d.Writer.Indent(d, spaces)
 }
 
 // IndentTabs modifies the document's element tree by inserting CharData
 // tokens containing newlines and tabs for indentation.  One tab is used per
 // indentation level.
 func (d *Document) IndentTabs() {
-	var indent indentFunc
-	switch d.WriteSettings.UseCRLF {
-	case true:
-		indent = func(depth int) string { return indentCRLF(depth, indentTabs) }
-	default:
-		indent = func(depth int) string { return indentLF(depth, indentTabs) }
-	}
-	d.Element.indent(0, indent)
+	d.Writer.IndentTabs(d)
 }
 
 // NewElement creates an unparented element with the specified tag (i.e.,
@@ -1036,33 +1012,6 @@ func (e *Element) setIndex(index int) {
 	e.index = index
 }
 
-// writeTo serializes the element to the writer w.
-func (e *Element) writeTo(w *bufio.Writer, s *WriteSettings) {
-	w.WriteByte('<')
-	w.WriteString(e.FullTag())
-	for _, a := range e.Attr {
-		w.WriteByte(' ')
-		a.writeTo(w, s)
-	}
-	if len(e.Child) > 0 {
-		w.WriteByte('>')
-		for _, c := range e.Child {
-			c.writeTo(w, s)
-		}
-		w.Write([]byte{'<', '/'})
-		w.WriteString(e.FullTag())
-		w.WriteByte('>')
-	} else {
-		if s.CanonicalEndTags {
-			w.Write([]byte{'>', '<', '/'})
-			w.WriteString(e.FullTag())
-			w.WriteByte('>')
-		} else {
-			w.Write([]byte{'/', '>'})
-		}
-	}
-}
-
 // addChild adds a child token to the element e.
 func (e *Element) addChild(t Token) {
 	t.setParent(e)
@@ -1162,20 +1111,6 @@ func (a *Attr) NamespaceURI() string {
 		return ""
 	}
 	return a.element.findLocalNamespaceURI(a.Space)
-}
-
-// writeTo serializes the attribute to the writer.
-func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
-	w.WriteString(a.FullKey())
-	w.WriteString(`="`)
-	var m escapeMode
-	if s.CanonicalAttrVal {
-		m = escapeCanonicalAttr
-	} else {
-		m = escapeNormal
-	}
-	escapeString(w, a.Value, m)
-	w.WriteByte('"')
 }
 
 // NewText creates an unparented CharData token containing simple text data.
@@ -1293,23 +1228,6 @@ func (c *CharData) setIndex(index int) {
 	c.index = index
 }
 
-// writeTo serializes character data to the writer.
-func (c *CharData) writeTo(w *bufio.Writer, s *WriteSettings) {
-	if c.IsCData() {
-		w.WriteString(`<![CDATA[`)
-		w.WriteString(c.Data)
-		w.WriteString(`]]>`)
-	} else {
-		var m escapeMode
-		if s.CanonicalText {
-			m = escapeCanonicalText
-		} else {
-			m = escapeNormal
-		}
-		escapeString(w, c.Data, m)
-	}
-}
-
 // NewComment creates an unparented comment token.
 func NewComment(comment string) *Comment {
 	return newComment(comment, nil)
@@ -1364,13 +1282,6 @@ func (c *Comment) setParent(parent *Element) {
 // slice.
 func (c *Comment) setIndex(index int) {
 	c.index = index
-}
-
-// writeTo serialies the comment to the writer.
-func (c *Comment) writeTo(w *bufio.Writer, s *WriteSettings) {
-	w.WriteString("<!--")
-	w.WriteString(c.Data)
-	w.WriteString("-->")
 }
 
 // NewDirective creates an unparented XML directive token.
@@ -1429,13 +1340,6 @@ func (d *Directive) setParent(parent *Element) {
 // slice.
 func (d *Directive) setIndex(index int) {
 	d.index = index
-}
-
-// writeTo serializes the XML directive to the writer.
-func (d *Directive) writeTo(w *bufio.Writer, s *WriteSettings) {
-	w.WriteString("<!")
-	w.WriteString(d.Data)
-	w.WriteString(">")
 }
 
 // NewProcInst creates an unparented XML processing instruction.
@@ -1497,15 +1401,4 @@ func (p *ProcInst) setParent(parent *Element) {
 // element's Child slice.
 func (p *ProcInst) setIndex(index int) {
 	p.index = index
-}
-
-// writeTo serializes the processing instruction to the writer.
-func (p *ProcInst) writeTo(w *bufio.Writer, s *WriteSettings) {
-	w.WriteString("<?")
-	w.WriteString(p.Target)
-	if p.Inst != "" {
-		w.WriteByte(' ')
-		w.WriteString(p.Inst)
-	}
-	w.WriteString("?>")
 }
