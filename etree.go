@@ -87,6 +87,11 @@ type WriteSettings struct {
 	// return followed by a linefeed ("\r\n") when outputting a newline. If
 	// false, only a linefeed is used ("\n"). Default: false.
 	UseCRLF bool
+
+	// AttrSingleQuote causes attributes to use single quotes (attr = 'example')
+	// instead of double quotes (attr = "example") when set to true.
+	// Default: false.
+	AttrSingleQuote bool
 }
 
 // newWriteSettings creates a default WriteSettings record.
@@ -1173,7 +1178,11 @@ func (a *Attr) NamespaceURI() string {
 // writeTo serializes the attribute to the writer.
 func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 	w.WriteString(a.FullKey())
-	w.WriteString(`="`)
+	if s.AttrSingleQuote {
+		w.WriteString(`='`)
+	} else {
+		w.WriteString(`="`)
+	}
 	var m escapeMode
 	if s.CanonicalAttrVal {
 		m = escapeCanonicalAttr
@@ -1181,7 +1190,11 @@ func (a *Attr) writeTo(w *bufio.Writer, s *WriteSettings) {
 		m = escapeNormal
 	}
 	escapeString(w, a.Value, m)
-	w.WriteByte('"')
+	if s.AttrSingleQuote {
+		w.WriteByte('\'')
+	} else {
+		w.WriteByte('"')
+	}
 }
 
 // NewText creates an unparented CharData token containing simple text data.
