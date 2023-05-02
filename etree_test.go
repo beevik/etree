@@ -272,6 +272,19 @@ func TestDocumentReadPermissive(t *testing.T) {
 	}
 }
 
+func TestEmbeddedComment(t *testing.T) {
+	s := `<a>123<!-- test -->456</a>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(s)
+	if err != nil {
+		t.Fatal("etree: incorrect ReadFromString result")
+	}
+
+	a := doc.SelectElement("a")
+	checkStrEq(t, a.Text(), "123456")
+}
+
 func TestDocumentReadHTMLEntities(t *testing.T) {
 	s := `<store>
 	<book lang="en">

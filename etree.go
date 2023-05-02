@@ -466,6 +466,8 @@ func (e *Element) Text() string {
 			} else {
 				text += cd.Data
 			}
+		} else if _, ok := ch.(*Comment); ok {
+			// ignore
 		} else {
 			break
 		}
