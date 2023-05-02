@@ -25,61 +25,67 @@ limited set of selectors and filtering options.
 
 The following selectors are supported by etree paths:
 
-    .               Select the current element.
-    ..              Select the parent of the current element.
-    *               Select all child elements of the current element.
-    /               Select the root element when used at the start of a path.
-    //              Select all descendants of the current element.
-    tag             Select all child elements with a name matching the tag.
+	.               Select the current element.
+	..              Select the parent of the current element.
+	*               Select all child elements of the current element.
+	/               Select the root element when used at the start of a path.
+	//              Select all descendants of the current element.
+	tag             Select all child elements with a name matching the tag.
 
 The following basic filters are supported:
 
-    [@attrib]       Keep elements with an attribute named attrib.
-    [@attrib='val'] Keep elements with an attribute named attrib and value matching val.
-    [tag]           Keep elements with a child element named tag.
-    [tag='val']     Keep elements with a child element named tag and text matching val.
-    [n]             Keep the n-th element, where n is a numeric index starting from 1.
+	[@attrib]       Keep elements with an attribute named attrib.
+	[@attrib='val'] Keep elements with an attribute named attrib and value matching val.
+	[tag]           Keep elements with a child element named tag.
+	[tag='val']     Keep elements with a child element named tag and text matching val.
+	[n]             Keep the n-th element, where n is a numeric index starting from 1.
 
 The following function-based filters are supported:
 
-    [text()]                    Keep elements with non-empty text.
-    [text()='val']              Keep elements whose text matches val.
-    [local-name()='val']        Keep elements whose un-prefixed tag matches val.
-    [name()='val']              Keep elements whose full tag exactly matches val.
-    [namespace-prefix()]        Keep elements with non-empty namespace prefixes.
-    [namespace-prefix()='val']  Keep elements whose namespace prefix matches val.
-    [namespace-uri()]           Keep elements with non-empty namespace URIs.
-    [namespace-uri()='val']     Keep elements whose namespace URI matches val.
+	[text()]                    Keep elements with non-empty text.
+	[text()='val']              Keep elements whose text matches val.
+	[local-name()='val']        Keep elements whose un-prefixed tag matches val.
+	[name()='val']              Keep elements whose full tag exactly matches val.
+	[namespace-prefix()]        Keep elements with non-empty namespace prefixes.
+	[namespace-prefix()='val']  Keep elements whose namespace prefix matches val.
+	[namespace-uri()]           Keep elements with non-empty namespace URIs.
+	[namespace-uri()='val']     Keep elements whose namespace URI matches val.
 
 Below are some examples of etree path strings.
 
 Select the bookstore child element of the root element:
-    /bookstore
+
+	/bookstore
 
 Beginning from the root element, select the title elements of all descendant
 book elements having a 'category' attribute of 'WEB':
-    //book[@category='WEB']/title
+
+	//book[@category='WEB']/title
 
 Beginning from the current element, select the first descendant book element
 with a title child element containing the text 'Great Expectations':
-    .//book[title='Great Expectations'][1]
+
+	.//book[title='Great Expectations'][1]
 
 Beginning from the current element, select all child elements of book elements
 with an attribute 'language' set to 'english':
-    ./book/*[@language='english']
+
+	./book/*[@language='english']
 
 Beginning from the current element, select all child elements of book elements
 containing the text 'special':
-    ./book/*[text()='special']
+
+	./book/*[text()='special']
 
 Beginning from the current element, select all descendant book elements whose
 title child element has a 'language' attribute of 'french':
-    .//book/title[@language='french']/..
+
+	.//book/title[@language='french']/..
 
 Beginning from the current element, select all descendant book elements
 belonging to the http://www.w3.org/TR/html4/ namespace:
-    .//book[namespace-uri()='http://www.w3.org/TR/html4/']
 
+	.//book[namespace-uri()='http://www.w3.org/TR/html4/']
 */
 type Path struct {
 	segments []segment
@@ -256,7 +262,7 @@ func (c *compiler) parseSegment(path string) segment {
 	}
 	for i := 1; i < len(pieces); i++ {
 		fpath := pieces[i]
-		if fpath[len(fpath)-1] != ']' {
+		if len(fpath) == 0 || fpath[len(fpath)-1] != ']' {
 			c.err = ErrPath("path has invalid filter [brackets].")
 			break
 		}
