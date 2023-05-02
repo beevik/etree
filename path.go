@@ -185,7 +185,7 @@ func (p *pather) traverse(e *Element, path Path) []*Element {
 	return p.results
 }
 
-// eval evalutes the current path node by applying the remaining
+// eval evaluates the current path node by applying the remaining
 // path's selector rules against the node's element.
 func (p *pather) eval(n node) {
 	p.candidates = p.candidates[0:0]
