@@ -1,3 +1,15 @@
+Release v1.1.2
+==============
+
+* Fixed a path parsing bug.
+* The `Element.Text` function now handles comments embedded between
+  character data spans.
+
+Release v1.1.1
+==============
+
+* Updated go version in `go.mod` to 1.20
+
 Release v1.1.0
 ==============
 
