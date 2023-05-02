@@ -1,3 +1,9 @@
+Release v1.1.3
+==============
+
+* XML reads now preserve CDATA sections instead of converting them to
+  standard character data.
+
 Release v1.1.2
 ==============
 
