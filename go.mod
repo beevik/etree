@@ -1,3 +1,3 @@
 module github.com/beevik/etree
 
-go 1.20
+go 1.13
