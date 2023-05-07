@@ -730,49 +730,28 @@ func TestCharData(t *testing.T) {
 	}
 }
 
-func TestIndentPreserveWhitespace(t *testing.T) {
-	tests := []struct {
-		input  string
-		output string
-	}{
-		{"<test></test>", "<test/>\n"},
-		{"<test>  </test>", "<test>  </test>\n"},
-		{"<test>\t</test>", "<test>\t</test>\n"},
-		{"<test>\t\n \t</test>", "<test>\t\n \t</test>\n"},
-		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>\n"},
-		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>\n"},
-		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>\n"},
-	}
-
-	for _, test := range tests {
-		doc := NewDocument()
-		doc.WriteSettings.PreserveLeafWhitespace = true
-		err := doc.ReadFromString(test.input)
-		if err != nil {
-			t.Error("etree: failed to read string")
-		}
-		doc.Indent(2)
-		output, err := doc.WriteToString()
-		if err != nil {
-			t.Error("etree: failed to read string")
-		}
-		checkStrEq(t, output, test.output)
-	}
-}
-
-func TestIndentSettings(t *testing.T) {
+func TestIndentSimple(t *testing.T) {
 	doc := NewDocument()
 	root := doc.CreateElement("root")
 	ch1 := root.CreateElement("child1")
 	ch1.CreateElement("child2")
 
-	// First test with NoIndent.
-	doc.Indent(NoIndent)
+	// First test Unindent.
+	doc.Unindent()
 	s, err := doc.WriteToString()
 	if err != nil {
 		t.Error("etree: failed to serialize document")
 	}
 	expected := "<root><child1><child2/></child1></root>"
+	checkStrEq(t, s, expected)
+
+	// Now test Indent with NoIndent (which should produce the same result
+	// as Unindent).
+	doc.Indent(NoIndent)
+	s, err = doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
 	checkStrEq(t, s, expected)
 
 	// Run all indent test cases.
@@ -813,6 +792,128 @@ func TestIndentSettings(t *testing.T) {
 				checkStrEq(t, s, expected)
 			}
 		}
+	}
+}
+
+func TestIndentWithDefaultSettings(t *testing.T) {
+	input := `<root>
+	<child1>
+		<child2>    </child2>
+	</child1>
+</root>`
+
+	doc := NewDocument()
+	err := doc.ReadFromString(input)
+	if err != nil {
+		t.Error("etree: failed to read string")
+	}
+
+	doc.IndentWithSettings(NewIndentSettings())
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+	expected := "<root>\n    <child1>\n        <child2/>\n    </child1>\n</root>\n"
+	checkStrEq(t, s, expected)
+}
+
+func TestIndentWithSettings(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateElement("root")
+	ch1 := root.CreateElement("child1")
+	ch1.CreateElement("child2")
+
+	// First test with NoIndent.
+	settings := NewIndentSettings()
+	settings.UseCRLF = false
+	settings.UseTabs = false
+	settings.Spaces = NoIndent
+	doc.IndentWithSettings(settings)
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+	expected := "<root><child1><child2/></child1></root>"
+	checkStrEq(t, s, expected)
+
+	// Run all indent test cases.
+	tests := []struct {
+		useTabs, useCRLF bool
+		ws, nl           string
+	}{
+		{false, false, " ", "\n"},
+		{false, true, " ", "\r\n"},
+		{true, false, "\t", "\n"},
+		{true, true, "\t", "\r\n"},
+	}
+
+	for _, test := range tests {
+		if test.useTabs {
+			settings := NewIndentSettings()
+			settings.UseTabs = true
+			settings.UseCRLF = test.useCRLF
+			doc.IndentWithSettings(settings)
+			s, err := doc.WriteToString()
+			if err != nil {
+				t.Error("etree: failed to serialize document")
+			}
+			tab := test.ws
+			expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
+				tab + tab + "<child2/>" + test.nl + tab +
+				"</child1>" + test.nl + "</root>" + test.nl
+			checkStrEq(t, s, expected)
+		} else {
+			for i := 0; i < 256; i++ {
+				settings := NewIndentSettings()
+				settings.Spaces = i
+				settings.UseTabs = false
+				settings.UseCRLF = test.useCRLF
+				doc.IndentWithSettings(settings)
+				s, err := doc.WriteToString()
+				if err != nil {
+					t.Error("etree: failed to serialize document")
+				}
+				tab := strings.Repeat(test.ws, i)
+				expected := "<root>" + test.nl + tab + "<child1>" + test.nl +
+					tab + tab + "<child2/>" + test.nl + tab +
+					"</child1>" + test.nl + "</root>" + test.nl
+				checkStrEq(t, s, expected)
+			}
+		}
+	}
+}
+
+func TestIndentPreserveWhitespace(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"<test></test>", "<test/>\n"},
+		{"<test>  </test>", "<test>  </test>\n"},
+		{"<test>\t</test>", "<test>\t</test>\n"},
+		{"<test>\t\n \t</test>", "<test>\t\n \t</test>\n"},
+		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>\n"},
+		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>\n"},
+		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>\n"},
+	}
+
+	for _, test := range tests {
+		doc := NewDocument()
+		err := doc.ReadFromString(test.input)
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+
+		s := NewIndentSettings()
+		s.Spaces = 2
+		s.PreserveLeafWhitespace = true
+		doc.IndentWithSettings(s)
+
+		output, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+		checkStrEq(t, output, test.expected)
 	}
 }
 
