@@ -83,24 +83,31 @@ type WriteSettings struct {
 	// references are also produced for > and '. Default: false.
 	CanonicalAttrVal bool
 
-	// UseCRLF causes the document's indentation methods to use a carriage
-	// return followed by a linefeed ("\r\n") when outputting a newline. If
-	// false, only a linefeed is used ("\n"). Default: false.
+	// AttrSingleQuote causes attributes to use single quotes (attr='example')
+	// instead of double quotes (attr = "example") when set to true. Default:
+	// false.
+	AttrSingleQuote bool
+
+	// UseCRLF causes the document's Indent* methods to use a carriage return
+	// followed by a linefeed ("\r\n") when outputting a newline. If false,
+	// only a linefeed is used ("\n"). Default: false.
 	UseCRLF bool
 
-	// AttrSingleQuote causes attributes to use single quotes (attr = 'example')
-	// instead of double quotes (attr = "example") when set to true.
-	// Default: false.
-	AttrSingleQuote bool
+	// PreserveLeafWhitespace causes the document's Indent* methods to
+	// preserve whitespace inside XML elements containing only non-CDATA
+	// character data. Default: false.
+	PreserveLeafWhitespace bool
 }
 
 // newWriteSettings creates a default WriteSettings record.
 func newWriteSettings() WriteSettings {
 	return WriteSettings{
-		CanonicalEndTags: false,
-		CanonicalText:    false,
-		CanonicalAttrVal: false,
-		UseCRLF:          false,
+		CanonicalEndTags:       false,
+		CanonicalText:          false,
+		CanonicalAttrVal:       false,
+		AttrSingleQuote:        false,
+		UseCRLF:                false,
+		PreserveLeafWhitespace: false,
 	}
 }
 
@@ -347,7 +354,7 @@ func (d *Document) Indent(spaces int) {
 	default:
 		indent = func(depth int) string { return indentLF(depth*spaces, indentSpaces) }
 	}
-	d.Element.indent(0, indent)
+	d.Element.indent(0, indent, &d.WriteSettings)
 }
 
 // IndentTabs modifies the document's element tree by inserting CharData
@@ -361,7 +368,7 @@ func (d *Document) IndentTabs() {
 	default:
 		indent = func(depth int) string { return indentLF(depth, indentTabs) }
 	}
-	d.Element.indent(0, indent)
+	d.Element.indent(0, indent, &d.WriteSettings)
 }
 
 // NewElement creates an unparented element with the specified tag (i.e.,
@@ -732,11 +739,10 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		case xml.CharData:
 			data := string(t)
 			var flags charDataFlags
-			if isWhitespace(data) {
-				flags |= whitespaceFlag
-			}
 			if xr.PeekContainsCdata() {
-				flags |= cdataFlag
+				flags = cdataFlag
+			} else if isWhitespace(data) {
+				flags = whitespaceFlag
 			}
 			newCharData(data, flags, top)
 		case xml.Comment:
@@ -936,8 +942,8 @@ func (e *Element) GetRelativePath(source *Element) string {
 
 // indent recursively inserts proper indentation between an XML element's
 // child tokens.
-func (e *Element) indent(depth int, indent indentFunc) {
-	e.stripIndent()
+func (e *Element) indent(depth int, indent indentFunc, s *WriteSettings) {
+	e.stripIndent(s)
 	n := len(e.Child)
 	if n == 0 {
 		return
@@ -965,7 +971,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 
 		// Recursively process child elements.
 		if ce, ok := c.(*Element); ok {
-			ce.indent(depth+1, indent)
+			ce.indent(depth+1, indent, s)
 		}
 	}
 
@@ -981,7 +987,7 @@ func (e *Element) indent(depth int, indent indentFunc) {
 }
 
 // stripIndent removes any previously inserted indentation.
-func (e *Element) stripIndent() {
+func (e *Element) stripIndent(s *WriteSettings) {
 	// Count the number of non-indent child tokens
 	n := len(e.Child)
 	for _, c := range e.Child {
@@ -990,6 +996,9 @@ func (e *Element) stripIndent() {
 		}
 	}
 	if n == len(e.Child) {
+		return
+	}
+	if n == 0 && len(e.Child) == 1 && s.PreserveLeafWhitespace {
 		return
 	}
 
@@ -1232,8 +1241,8 @@ func newCharData(data string, flags charDataFlags, parent *Element) *CharData {
 	return c
 }
 
-// CreateText creates a CharData token simple text data and adds it to the
-// end of this element's list of child tokens.
+// CreateText creates a CharData token containing simple text data and adds it
+// to the end of this element's list of child tokens.
 func (e *Element) CreateText(text string) *CharData {
 	return newCharData(text, 0, e)
 }
@@ -1245,13 +1254,13 @@ func (e *Element) CreateCData(data string) *CharData {
 	return newCharData(data, cdataFlag, e)
 }
 
-// CreateCharData creates a CharData token simple text data and adds it to the
-// end of this element's list of child tokens.
+// CreateCharData creates a CharData token containing simple text data and
+// adds it to the end of this element's list of child tokens.
 //
 // Deprecated: CreateCharData is deprecated. Instead, use CreateText, which
 // does the same thing.
 func (e *Element) CreateCharData(data string) *CharData {
-	return newCharData(data, 0, e)
+	return e.CreateText(data)
 }
 
 // SetData modifies the content of the CharData token. In the case of a

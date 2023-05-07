@@ -733,6 +733,36 @@ func TestCharData(t *testing.T) {
 	}
 }
 
+func TestIndentPreserveWhitespace(t *testing.T) {
+	tests := []struct {
+		input  string
+		output string
+	}{
+		{"<test></test>", "<test/>\n"},
+		{"<test>  </test>", "<test>  </test>\n"},
+		{"<test>\t</test>", "<test>\t</test>\n"},
+		{"<test>\t\n \t</test>", "<test>\t\n \t</test>\n"},
+		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>\n"},
+		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>\n"},
+		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>\n"},
+	}
+
+	for _, test := range tests {
+		doc := NewDocument()
+		doc.WriteSettings.PreserveLeafWhitespace = true
+		err := doc.ReadFromString(test.input)
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+		doc.Indent(2)
+		output, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+		checkStrEq(t, output, test.output)
+	}
+}
+
 func TestIndentSettings(t *testing.T) {
 	doc := NewDocument()
 	root := doc.CreateElement("root")
