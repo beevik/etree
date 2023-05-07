@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// NoIndent is used with the Document Indent function to disable all
+	// NoIndent is used with the IndentSettings record to remove all
 	// indenting.
 	NoIndent = -1
 )
@@ -111,8 +111,7 @@ func (s *WriteSettings) dup() WriteSettings {
 	return *s
 }
 
-// IndentSettings determine the behavior of the Document's Indent and
-// IndentTabs methods.
+// IndentSettings determine the behavior of the Document's Indent* methods.
 type IndentSettings struct {
 	// Spaces indicates the number of spaces to insert for each level of
 	// indentation. Set to etree.NoIndent to remove all indentation. Ignored
@@ -132,15 +131,20 @@ type IndentSettings struct {
 	// within XML elements containing only non-CDATA character data. Default:
 	// false.
 	PreserveLeafWhitespace bool
+
+	// SuppressTrailingNewline suppresses the generation of a trailing newline
+	// character at the end of the indented document. Default: false.
+	SuppressTrailingNewline bool
 }
 
 // NewIndentSettings creates a default IndentSettings record.
 func NewIndentSettings() IndentSettings {
 	return IndentSettings{
-		Spaces:                 4,
-		UseTabs:                false,
-		UseCRLF:                false,
-		PreserveLeafWhitespace: false,
+		Spaces:                  4,
+		UseTabs:                 false,
+		UseCRLF:                 false,
+		PreserveLeafWhitespace:  false,
+		SuppressTrailingNewline: false,
 	}
 }
 
@@ -370,8 +374,8 @@ type indentFunc func(depth int) string
 
 // Indent modifies the document's element tree by inserting character data
 // tokens containing newlines and spaces for indentation. The amount of
-// indentation per depth level is given by the 'spaces' parameter. Pass
-// etree.NoIndent for 'spaces' if you want indentation to be removed.
+// indentation per depth level is given by the 'spaces' parameter. Other than
+// the number of spaces, default IndentSettings are used.
 func (d *Document) Indent(spaces int) {
 	s := NewIndentSettings()
 	s.Spaces = spaces
@@ -380,7 +384,8 @@ func (d *Document) Indent(spaces int) {
 
 // IndentTabs modifies the document's element tree by inserting CharData
 // tokens containing newlines and tabs for indentation. One tab is used per
-// indentation level.
+// indentation level. Other than the use of tabs, default IndentSettings
+// are used.
 func (d *Document) IndentTabs() {
 	s := NewIndentSettings()
 	s.UseTabs = true
@@ -415,12 +420,22 @@ func (d *Document) IndentWithSettings(s IndentSettings) {
 	}
 
 	d.Element.indent(0, indent, &s)
+
+	if s.SuppressTrailingNewline && len(d.Element.Child) > 0 {
+		n := len(d.Element.Child) - 1
+		if cd, ok := d.Element.Child[n].(*CharData); ok && (cd.flags&whitespaceFlag) != 0 {
+			d.Element.Child = d.Element.Child[:n]
+		}
+	}
 }
 
 // Unindent modifies the document's element tree by removing character data
-// tokens containing only whitespace.
+// tokens containing only whitespace. Other than the removal of indentation,
+// default IndentSettings are used.
 func (d *Document) Unindent() {
-	d.Indent(NoIndent)
+	s := NewIndentSettings()
+	s.Spaces = NoIndent
+	d.IndentWithSettings(s)
 }
 
 // NewElement creates an unparented element with the specified tag (i.e.,

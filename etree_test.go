@@ -888,13 +888,13 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"<test></test>", "<test/>\n"},
-		{"<test>  </test>", "<test>  </test>\n"},
-		{"<test>\t</test>", "<test>\t</test>\n"},
-		{"<test>\t\n \t</test>", "<test>\t\n \t</test>\n"},
-		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>\n"},
-		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>\n"},
-		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>\n"},
+		{"<test></test>", "<test/>"},
+		{"<test>  </test>", "<test>  </test>"},
+		{"<test>\t</test>", "<test>\t</test>"},
+		{"<test>\t\n \t</test>", "<test>\t\n \t</test>"},
+		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>"},
+		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>"},
+		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>"},
 	}
 
 	for _, test := range tests {
@@ -907,6 +907,7 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 		s := NewIndentSettings()
 		s.Spaces = 2
 		s.PreserveLeafWhitespace = true
+		s.SuppressTrailingNewline = true
 		doc.IndentWithSettings(s)
 
 		output, err := doc.WriteToString()
