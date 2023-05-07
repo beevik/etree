@@ -426,10 +426,7 @@ func TestCopy(t *testing.T) {
 
 	e1 := doc.FindElement("./store/book/title")
 	e2 := doc2.FindElement("./store/book/title")
-	if e1 == nil || e2 == nil {
-		t.Error("etree: incorrect FindElement result")
-	}
-	if e1 == e2 {
+	if e1 == nil || e2 == nil || e1.parent == nil || e1 == e2 {
 		t.Error("etree: incorrect FindElement result")
 	}
 
