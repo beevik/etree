@@ -775,7 +775,6 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 	var stack stack
 	stack.push(e)
 	for {
-		xr.ResetPeek(dec.InputOffset())
 		t, err := dec.RawToken()
 		switch {
 		case err == io.EOF:
@@ -806,9 +805,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		case xml.CharData:
 			data := string(t)
 			var flags charDataFlags
-			if xr.PeekContainsCdata() {
-				flags = cdataFlag
-			} else if isWhitespace(data) {
+			if isWhitespace(data) {
 				flags = whitespaceFlag
 			}
 			newCharData(data, flags, top)

@@ -892,8 +892,8 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 		{"<test>  </test>", "<test>  </test>"},
 		{"<test>\t</test>", "<test>\t</test>"},
 		{"<test>\t\n \t</test>", "<test>\t\n \t</test>"},
-		{"<test><![CDATA[ ]]></test>", "<test><![CDATA[ ]]></test>"},
-		{"<test> <![CDATA[ ]]> </test>", "<test><![CDATA[ ]]></test>"},
+		{"<test><![CDATA[ ]]></test>", "<test> </test>"},
+		{"<test> <![CDATA[ ]]> </test>", "<test/>"},
 		{"<outer> <inner> </inner> </outer>", "<outer>\n  <inner> </inner>\n</outer>"},
 	}
 
@@ -1277,23 +1277,4 @@ func TestWhitespace(t *testing.T) {
 
 	cd.SetData("")
 	checkBoolEq(t, cd.IsWhitespace(), true)
-}
-
-func TestPreserveCDATA(t *testing.T) {
-	s := `<name><![CDATA[My]] <b>name</b> <![CDATA[is]]></name>`
-
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err != nil {
-		t.Fatalf("etree: failed to ReadFromString: %v", err)
-	}
-
-	result, err := doc.WriteToString()
-	if err != nil {
-		t.Fatalf("etree: failed to WriteToString: %v", err)
-	}
-
-	if result != s {
-		t.Errorf("etree: wanted %q, got %q", s, result)
-	}
 }

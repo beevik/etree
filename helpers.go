@@ -6,7 +6,6 @@ package etree
 
 import (
 	"bufio"
-	"bytes"
 	"io"
 	"strings"
 	"unicode/utf8"
@@ -88,54 +87,20 @@ func (f *fifo) grow() {
 // bytes read from its encapsulated reader and detects when a CDATA
 // prefix has been parsed.
 type xmlReader struct {
-	r     io.ByteReader
+	r     io.Reader
 	bytes int64
-	peek  []byte
-	last  byte
 }
 
 var cdataPrefix = []byte("<![CDATA[")
 
 func newXmlReader(r io.Reader) *xmlReader {
-	return &xmlReader{
-		r:     bufio.NewReader(r),
-		bytes: 0,
-		peek:  make([]byte, 0, len(cdataPrefix)),
-		last:  0,
-	}
+	return &xmlReader{r, 0}
 }
 
 func (xr *xmlReader) Read(p []byte) (n int, err error) {
-	// Since xmlReader implements the io.ByteReader interface, the XML decoder
-	// bypasses Read in favor of ReadByte.
-	return 0, nil
-}
-
-func (xr *xmlReader) ReadByte() (b byte, err error) {
-	b, err = xr.r.ReadByte()
-	if err == nil {
-		xr.last = b
-		xr.bytes += 1
-		if len(xr.peek) < len(cdataPrefix) {
-			xr.peek = append(xr.peek, b)
-		}
-	}
-	return b, err
-}
-
-func (xr *xmlReader) ResetPeek(decoderOffset int64) {
-	xr.peek = xr.peek[0:0]
-
-	// If the decoder offset doesn't match the number of bytes read so far,
-	// then the decoder performed an "unget" on the last byte read. Return
-	// this byte to the front of the peek buffer.
-	if decoderOffset != xr.bytes {
-		xr.peek = append(xr.peek, xr.last)
-	}
-}
-
-func (xr *xmlReader) PeekContainsCdata() bool {
-	return bytes.Equal(xr.peek, cdataPrefix)
+	n, err = xr.r.Read(p)
+	xr.bytes += int64(n)
+	return n, err
 }
 
 // xmlWriter implements a proxy writer that counts the number of
