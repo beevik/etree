@@ -239,7 +239,7 @@ func TestImbalancedXML(t *testing.T) {
 
 func TestDocumentReadNonUTF8Encodings(t *testing.T) {
 	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
-	<store>
+store>
 	<book lang="en">
 		<title>Great Expectations</title>
 		<author>Charles Dickens</author>

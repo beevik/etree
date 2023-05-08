@@ -91,8 +91,6 @@ type xmlReader struct {
 	bytes int64
 }
 
-var cdataPrefix = []byte("<![CDATA[")
-
 func newXmlReader(r io.Reader) *xmlReader {
 	return &xmlReader{r, 0}
 }
