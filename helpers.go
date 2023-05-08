@@ -83,22 +83,140 @@ func (f *fifo) grow() {
 	f.data, f.head, f.tail = buf, 0, count
 }
 
-// xmlReader implements a proxy reader that counts the number of
-// bytes read from its encapsulated reader and detects when a CDATA
-// prefix has been parsed.
-type xmlReader struct {
+// xmlReader provides the interface by which an XML byte stream is
+// processed and decoded.
+type xmlReader interface {
+	Bytes() int64
+	Read(p []byte) (n int, err error)
+}
+
+// xmlSimpleReader implements a proxy reader that counts the number of
+// bytes read from its encapsulated reader.
+type xmlSimpleReader struct {
 	r     io.Reader
 	bytes int64
 }
 
-func newXmlReader(r io.Reader) *xmlReader {
-	return &xmlReader{r, 0}
+func newXmlSimpleReader(r io.Reader) xmlReader {
+	return &xmlSimpleReader{r, 0}
 }
 
-func (xr *xmlReader) Read(p []byte) (n int, err error) {
+func (xr *xmlSimpleReader) Bytes() int64 {
+	return xr.bytes
+}
+
+func (xr *xmlSimpleReader) Read(p []byte) (n int, err error) {
 	n, err = xr.r.Read(p)
 	xr.bytes += int64(n)
 	return n, err
+}
+
+// xmlPeekReader implements a proxy reader that counts the number of
+// bytes read from its encapsulated reader. It also allows the caller to
+// "peek" at the previous portions of the buffer after they have been
+// parsed.
+type xmlPeekReader struct {
+	r          io.Reader
+	bytes      int64  // total bytes read by the Read function
+	buf        []byte // internal read buffer
+	bufSize    int    // total bytes used in the read buffer
+	bufOffset  int64  // total bytes read when buf was last filled
+	window     []byte // current read buffer window
+	peekBuf    []byte // buffer used to store data to be peeked at later
+	peekOffset int64  // total read offset of the start of the peek buffer
+}
+
+func newXmlPeekReader(r io.Reader) *xmlPeekReader {
+	buf := make([]byte, 4096)
+	return &xmlPeekReader{
+		r:          r,
+		bytes:      0,
+		buf:        buf,
+		bufSize:    0,
+		bufOffset:  0,
+		window:     buf[0:0],
+		peekBuf:    make([]byte, 0),
+		peekOffset: -1,
+	}
+}
+
+func (xr *xmlPeekReader) Bytes() int64 {
+	return xr.bytes
+}
+
+func (xr *xmlPeekReader) Read(p []byte) (n int, err error) {
+	if len(xr.window) == 0 {
+		err = xr.fill()
+		if err != nil {
+			return 0, err
+		}
+		if len(xr.window) == 0 {
+			return 0, nil
+		}
+	}
+
+	if len(xr.window) < len(p) {
+		n = len(xr.window)
+	} else {
+		n = len(p)
+	}
+
+	copy(p, xr.window)
+	xr.window = xr.window[n:]
+	xr.bytes += int64(n)
+
+	return n, err
+}
+
+func (xr *xmlPeekReader) PeekPrepare(offset int64, maxLen int) {
+	if maxLen > cap(xr.peekBuf) {
+		xr.peekBuf = make([]byte, 0, maxLen)
+	}
+	xr.peekBuf = xr.peekBuf[0:0]
+	xr.peekOffset = offset
+	xr.updatePeekBuf()
+}
+
+func (xr *xmlPeekReader) PeekFinalize() []byte {
+	xr.updatePeekBuf()
+	return xr.peekBuf
+}
+
+func (xr *xmlPeekReader) fill() error {
+	xr.bufOffset = xr.bytes
+	xr.bufSize = 0
+	n, err := xr.r.Read(xr.buf)
+	if err != nil {
+		xr.window, xr.bufSize = xr.buf[0:0], 0
+		return err
+	}
+	xr.window, xr.bufSize = xr.buf[:n], n
+	xr.updatePeekBuf()
+	return nil
+}
+
+func (xr *xmlPeekReader) updatePeekBuf() {
+	peekRemain := cap(xr.peekBuf) - len(xr.peekBuf)
+	if xr.peekOffset >= 0 && peekRemain > 0 {
+		rangeMin := xr.peekOffset
+		rangeMax := xr.peekOffset + int64(cap(xr.peekBuf))
+		bufMin := xr.bufOffset
+		bufMax := xr.bufOffset + int64(xr.bufSize)
+		if rangeMin < bufMin {
+			rangeMin = bufMin
+		}
+		if rangeMax > bufMax {
+			rangeMax = bufMax
+		}
+		if rangeMax > rangeMin {
+			rangeMin -= xr.bufOffset
+			rangeMax -= xr.bufOffset
+			if int(rangeMax-rangeMin) > peekRemain {
+				rangeMax = rangeMin + int64(peekRemain)
+			}
+			xr.peekBuf = append(xr.peekBuf, xr.buf[rangeMin:rangeMax]...)
+		}
+	}
 }
 
 // xmlWriter implements a proxy writer that counts the number of

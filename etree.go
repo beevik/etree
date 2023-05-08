@@ -26,6 +26,10 @@ const (
 // ErrXML is returned when XML parsing fails due to incorrect formatting.
 var ErrXML = errors.New("etree: invalid XML format")
 
+// cdataPrefix is used to detect CDATA text when ReadSettings.PreserveCData is
+// true.
+var cdataPrefix = []byte("<![CDATA[")
+
 // ReadSettings determine the default behavior of the Document's ReadFrom*
 // methods.
 type ReadSettings struct {
@@ -35,6 +39,12 @@ type ReadSettings struct {
 	// Permissive allows input containing common mistakes such as missing tags
 	// or attribute values. Default: false.
 	Permissive bool
+
+	// Preserve CDATA character data blocks when decoding XML (instead of
+	// converting it to normal character text). This entails additional
+	// processing and memory usage during ReadFrom* operations. Default:
+	// false.
+	PreserveCData bool
 
 	// Entity to be passed to standard xml.Decoder. Default: nil.
 	Entity map[string]string
@@ -46,7 +56,9 @@ func newReadSettings() ReadSettings {
 		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
 			return input, nil
 		},
-		Permissive: false,
+		Permissive:    false,
+		PreserveCData: false,
+		Entity:        nil,
 	}
 }
 
@@ -767,25 +779,39 @@ func (e *Element) RemoveChildAt(index int) Token {
 // ReadFrom reads XML from the reader 'ri' and stores the result as a new
 // child of this element.
 func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err error) {
-	xr := newXmlReader(ri)
-	dec := xml.NewDecoder(xr)
+	var r xmlReader
+	var pr *xmlPeekReader
+	if settings.PreserveCData {
+		pr = newXmlPeekReader(ri)
+		r = pr
+	} else {
+		r = newXmlSimpleReader(ri)
+	}
+
+	dec := xml.NewDecoder(r)
 	dec.CharsetReader = settings.CharsetReader
 	dec.Strict = !settings.Permissive
 	dec.Entity = settings.Entity
+
 	var stack stack
 	stack.push(e)
 	for {
+		if pr != nil {
+			pr.PeekPrepare(dec.InputOffset(), len(cdataPrefix))
+		}
+
 		t, err := dec.RawToken()
+
 		switch {
 		case err == io.EOF:
 			if len(stack.data) != 1 {
-				return xr.bytes, ErrXML
+				return r.Bytes(), ErrXML
 			}
-			return xr.bytes, nil
+			return r.Bytes(), nil
 		case err != nil:
-			return xr.bytes, err
+			return r.Bytes(), err
 		case stack.empty():
-			return xr.bytes, ErrXML
+			return r.Bytes(), ErrXML
 		}
 
 		top := stack.peek().(*Element)
@@ -799,14 +825,23 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			stack.push(e)
 		case xml.EndElement:
 			if top.Tag != t.Name.Local || top.Space != t.Name.Space {
-				return xr.bytes, ErrXML
+				return r.Bytes(), ErrXML
 			}
 			stack.pop()
 		case xml.CharData:
 			data := string(t)
 			var flags charDataFlags
-			if isWhitespace(data) {
-				flags = whitespaceFlag
+			if pr != nil {
+				peekBuf := pr.PeekFinalize()
+				if bytes.Equal(peekBuf, cdataPrefix) {
+					flags = cdataFlag
+				} else if isWhitespace(data) {
+					flags = whitespaceFlag
+				}
+			} else {
+				if isWhitespace(data) {
+					flags = whitespaceFlag
+				}
 			}
 			newCharData(data, flags, top)
 		case xml.Comment:

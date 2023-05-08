@@ -239,7 +239,7 @@ func TestImbalancedXML(t *testing.T) {
 
 func TestDocumentReadNonUTF8Encodings(t *testing.T) {
 	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
-store>
+<store>
 	<book lang="en">
 		<title>Great Expectations</title>
 		<author>Charles Dickens</author>
@@ -915,6 +915,54 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 			t.Error("etree: failed to read string")
 		}
 		checkStrEq(t, output, test.expected)
+	}
+}
+
+func TestPreserveCData(t *testing.T) {
+	tests := []struct {
+		input                   string
+		expectedWithPreserve    string
+		expectedWithoutPreserve string
+	}{
+		{
+			"<test><![CDATA[x]]></test>",
+			"<test><![CDATA[x]]></test>",
+			"<test>x</test>",
+		},
+		{
+			"<tag><![CDATA[x <b>foo</b>]]></tag>",
+			"<tag><![CDATA[x <b>foo</b>]]></tag>",
+			"<tag>x &lt;b&gt;foo&lt;/b&gt;</tag>",
+		},
+		{
+			"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
+			"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
+			"<name>My <b>name</b> is</name>",
+		},
+	}
+
+	for _, test := range tests {
+		doc := NewDocument()
+		doc.ReadSettings.PreserveCData = true
+		err := doc.ReadFromString(test.input)
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+
+		output, err := doc.WriteToString()
+		checkStrEq(t, output, test.expectedWithPreserve)
+	}
+
+	for _, test := range tests {
+		doc := NewDocument()
+		doc.ReadSettings.PreserveCData = false
+		err := doc.ReadFromString(test.input)
+		if err != nil {
+			t.Error("etree: failed to read string")
+		}
+
+		output, err := doc.WriteToString()
+		checkStrEq(t, output, test.expectedWithoutPreserve)
 	}
 }
 
