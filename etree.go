@@ -107,14 +107,6 @@ type WriteSettings struct {
 	UseCRLF bool
 }
 
-// XMLWriter is a Writer that also has convenience methods for writing
-// strings an single bytes.
-type XMLWriter interface {
-	io.StringWriter
-	io.ByteWriter
-	io.Writer
-}
-
 // newWriteSettings creates a default WriteSettings record.
 func newWriteSettings() WriteSettings {
 	return WriteSettings{
@@ -152,20 +144,49 @@ type IndentSettings struct {
 	// false.
 	PreserveLeafWhitespace bool
 
-	// SuppressTrailingNewline suppresses the generation of a trailing newline
-	// character at the end of the indented document. Default: false.
-	SuppressTrailingNewline bool
+	// SuppressTrailingWhitespace suppresses the generation of a trailing
+	// whitespace characters (such as newlines) at the end of the indented
+	// document. Default: false.
+	SuppressTrailingWhitespace bool
 }
 
 // NewIndentSettings creates a default IndentSettings record.
-func NewIndentSettings() IndentSettings {
-	return IndentSettings{
-		Spaces:                  4,
-		UseTabs:                 false,
-		UseCRLF:                 false,
-		PreserveLeafWhitespace:  false,
-		SuppressTrailingNewline: false,
+func NewIndentSettings() *IndentSettings {
+	return &IndentSettings{
+		Spaces:                     4,
+		UseTabs:                    false,
+		UseCRLF:                    false,
+		PreserveLeafWhitespace:     false,
+		SuppressTrailingWhitespace: false,
 	}
+}
+
+type indentFunc func(depth int) string
+
+func getIndentFunc(s *IndentSettings) indentFunc {
+	if s.UseTabs {
+		if s.UseCRLF {
+			return func(depth int) string { return indentCRLF(depth, indentTabs) }
+		} else {
+			return func(depth int) string { return indentLF(depth, indentTabs) }
+		}
+	} else {
+		if s.Spaces < 0 {
+			return func(depth int) string { return "" }
+		} else if s.UseCRLF {
+			return func(depth int) string { return indentCRLF(depth*s.Spaces, indentSpaces) }
+		} else {
+			return func(depth int) string { return indentLF(depth*s.Spaces, indentSpaces) }
+		}
+	}
+}
+
+// Writer is the interface that wraps the Write* methods called by each token
+// type's WriteTo function.
+type Writer interface {
+	io.StringWriter
+	io.ByteWriter
+	io.Writer
 }
 
 // A Token is an interface type used to represent XML elements, character
@@ -174,7 +195,7 @@ func NewIndentSettings() IndentSettings {
 type Token interface {
 	Parent() *Element
 	Index() int
-	WriteTo(w XMLWriter, s *WriteSettings)
+	WriteTo(w Writer, s *WriteSettings)
 	dup(parent *Element) Token
 	setParent(parent *Element)
 	setIndex(index int)
@@ -390,8 +411,6 @@ func (d *Document) WriteToString() (s string, err error) {
 	return string(b), nil
 }
 
-type indentFunc func(depth int) string
-
 // Indent modifies the document's element tree by inserting character data
 // tokens containing newlines and spaces for indentation. The amount of
 // indentation per depth level is given by the 'spaces' parameter. Other than
@@ -415,37 +434,17 @@ func (d *Document) IndentTabs() {
 // IndentWithSettings modifies the document's element tree by inserting
 // character data tokens containing newlines and indentation. The behavior
 // of the indentation algorithm is configured by the indent settings.
-func (d *Document) IndentWithSettings(s IndentSettings) {
+func (d *Document) IndentWithSettings(s *IndentSettings) {
 	// WriteSettings.UseCRLF is deprecated. Until removed from the package, it
 	// overrides IndentSettings.UseCRLF when true.
 	if d.WriteSettings.UseCRLF {
 		s.UseCRLF = true
 	}
 
-	var indent indentFunc
-	if s.UseTabs {
-		if s.UseCRLF {
-			indent = func(depth int) string { return indentCRLF(depth, indentTabs) }
-		} else {
-			indent = func(depth int) string { return indentLF(depth, indentTabs) }
-		}
-	} else {
-		if s.Spaces < 0 {
-			indent = func(depth int) string { return "" }
-		} else if s.UseCRLF {
-			indent = func(depth int) string { return indentCRLF(depth*s.Spaces, indentSpaces) }
-		} else {
-			indent = func(depth int) string { return indentLF(depth*s.Spaces, indentSpaces) }
-		}
-	}
+	d.Element.indent(0, getIndentFunc(s), s)
 
-	d.Element.indent(0, indent, &s)
-
-	if s.SuppressTrailingNewline && len(d.Element.Child) > 0 {
-		n := len(d.Element.Child) - 1
-		if cd, ok := d.Element.Child[n].(*CharData); ok && (cd.flags&whitespaceFlag) != 0 {
-			d.Element.Child = d.Element.Child[:n]
-		}
+	if s.SuppressTrailingWhitespace {
+		d.Element.stripTrailingWhitespace()
 	}
 }
 
@@ -1047,6 +1046,16 @@ func (e *Element) GetRelativePath(source *Element) string {
 	return strings.Join(parts, "/")
 }
 
+// IndentWithSettings modifies the element and its child tree by inserting
+// character data tokens containing newlines and indentation. The behavior of
+// the indentation algorithm is configured by the indent settings. Because
+// this function indents the element as if it were at the root of a document,
+// it is most useful when called just before writing the element as an XML
+// fragment using WriteTo.
+func (e *Element) IndentWithSettings(s *IndentSettings) {
+	e.indent(1, getIndentFunc(s), s)
+}
+
 // indent recursively inserts proper indentation between an XML element's
 // child tokens.
 func (e *Element) indent(depth int, indent indentFunc, s *IndentSettings) {
@@ -1123,6 +1132,17 @@ func (e *Element) stripIndent(s *IndentSettings) {
 	e.Child = newChild
 }
 
+// stripTrailingWhitespace removes any trailing whitespace CharData tokens
+// from the element's children.
+func (e *Element) stripTrailingWhitespace() {
+	for i := len(e.Child) - 1; i >= 0; i-- {
+		if cd, ok := e.Child[i].(*CharData); !ok || !cd.IsWhitespace() {
+			e.Child = e.Child[:i+1]
+			return
+		}
+	}
+}
+
 // dup duplicates the element.
 func (e *Element) dup(parent *Element) Token {
 	ne := &Element{
@@ -1153,18 +1173,8 @@ func (e *Element) Index() int {
 	return e.index
 }
 
-// setParent replaces this element token's parent.
-func (e *Element) setParent(parent *Element) {
-	e.parent = parent
-}
-
-// setIndex sets this element token's index within its parent's Child slice.
-func (e *Element) setIndex(index int) {
-	e.index = index
-}
-
 // WriteTo serializes the element to the writer w.
-func (e *Element) WriteTo(w XMLWriter, s *WriteSettings) {
+func (e *Element) WriteTo(w Writer, s *WriteSettings) {
 	w.WriteByte('<')
 	w.WriteString(e.FullTag())
 	for _, a := range e.Attr {
@@ -1188,6 +1198,16 @@ func (e *Element) WriteTo(w XMLWriter, s *WriteSettings) {
 			w.Write([]byte{'/', '>'})
 		}
 	}
+}
+
+// setParent replaces this element token's parent.
+func (e *Element) setParent(parent *Element) {
+	e.parent = parent
+}
+
+// setIndex sets this element token's index within its parent's Child slice.
+func (e *Element) setIndex(index int) {
+	e.index = index
 }
 
 // addChild adds a child token to the element e.
@@ -1292,7 +1312,7 @@ func (a *Attr) NamespaceURI() string {
 }
 
 // WriteTo serializes the attribute to the writer.
-func (a *Attr) WriteTo(w XMLWriter, s *WriteSettings) {
+func (a *Attr) WriteTo(w Writer, s *WriteSettings) {
 	w.WriteString(a.FullKey())
 	if s.AttrSingleQuote {
 		w.WriteString(`='`)
@@ -1407,6 +1427,23 @@ func (c *CharData) Index() int {
 	return c.index
 }
 
+// WriteTo serializes character data to the writer.
+func (c *CharData) WriteTo(w Writer, s *WriteSettings) {
+	if c.IsCData() {
+		w.WriteString(`<![CDATA[`)
+		w.WriteString(c.Data)
+		w.WriteString(`]]>`)
+	} else {
+		var m escapeMode
+		if s.CanonicalText {
+			m = escapeCanonicalText
+		} else {
+			m = escapeNormal
+		}
+		escapeString(w, c.Data, m)
+	}
+}
+
 // dup duplicates the character data.
 func (c *CharData) dup(parent *Element) Token {
 	return &CharData{
@@ -1426,23 +1463,6 @@ func (c *CharData) setParent(parent *Element) {
 // slice.
 func (c *CharData) setIndex(index int) {
 	c.index = index
-}
-
-// WriteTo serializes character data to the writer.
-func (c *CharData) WriteTo(w XMLWriter, s *WriteSettings) {
-	if c.IsCData() {
-		w.WriteString(`<![CDATA[`)
-		w.WriteString(c.Data)
-		w.WriteString(`]]>`)
-	} else {
-		var m escapeMode
-		if s.CanonicalText {
-			m = escapeCanonicalText
-		} else {
-			m = escapeNormal
-		}
-		escapeString(w, c.Data, m)
-	}
 }
 
 // NewComment creates an unparented comment token.
@@ -1490,6 +1510,13 @@ func (c *Comment) Index() int {
 	return c.index
 }
 
+// WriteTo serialies the comment to the writer.
+func (c *Comment) WriteTo(w Writer, s *WriteSettings) {
+	w.WriteString("<!--")
+	w.WriteString(c.Data)
+	w.WriteString("-->")
+}
+
 // setParent replaces the comment token's parent.
 func (c *Comment) setParent(parent *Element) {
 	c.parent = parent
@@ -1499,13 +1526,6 @@ func (c *Comment) setParent(parent *Element) {
 // slice.
 func (c *Comment) setIndex(index int) {
 	c.index = index
-}
-
-// WriteTo serialies the comment to the writer.
-func (c *Comment) WriteTo(w XMLWriter, s *WriteSettings) {
-	w.WriteString("<!--")
-	w.WriteString(c.Data)
-	w.WriteString("-->")
 }
 
 // NewDirective creates an unparented XML directive token.
@@ -1555,6 +1575,13 @@ func (d *Directive) Index() int {
 	return d.index
 }
 
+// WriteTo serializes the XML directive to the writer.
+func (d *Directive) WriteTo(w Writer, s *WriteSettings) {
+	w.WriteString("<!")
+	w.WriteString(d.Data)
+	w.WriteString(">")
+}
+
 // setParent replaces the directive token's parent.
 func (d *Directive) setParent(parent *Element) {
 	d.parent = parent
@@ -1564,13 +1591,6 @@ func (d *Directive) setParent(parent *Element) {
 // slice.
 func (d *Directive) setIndex(index int) {
 	d.index = index
-}
-
-// WriteTo serializes the XML directive to the writer.
-func (d *Directive) WriteTo(w XMLWriter, s *WriteSettings) {
-	w.WriteString("<!")
-	w.WriteString(d.Data)
-	w.WriteString(">")
 }
 
 // NewProcInst creates an unparented XML processing instruction.
@@ -1623,6 +1643,17 @@ func (p *ProcInst) Index() int {
 	return p.index
 }
 
+// WriteTo serializes the processing instruction to the writer.
+func (p *ProcInst) WriteTo(w Writer, s *WriteSettings) {
+	w.WriteString("<?")
+	w.WriteString(p.Target)
+	if p.Inst != "" {
+		w.WriteByte(' ')
+		w.WriteString(p.Inst)
+	}
+	w.WriteString("?>")
+}
+
 // setParent replaces the processing instruction token's parent.
 func (p *ProcInst) setParent(parent *Element) {
 	p.parent = parent
@@ -1632,15 +1663,4 @@ func (p *ProcInst) setParent(parent *Element) {
 // element's Child slice.
 func (p *ProcInst) setIndex(index int) {
 	p.index = index
-}
-
-// WriteTo serializes the processing instruction to the writer.
-func (p *ProcInst) WriteTo(w XMLWriter, s *WriteSettings) {
-	w.WriteString("<?")
-	w.WriteString(p.Target)
-	if p.Inst != "" {
-		w.WriteByte(' ')
-		w.WriteString(p.Inst)
-	}
-	w.WriteString("?>")
 }

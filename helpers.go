@@ -329,7 +329,7 @@ const (
 )
 
 // escapeString writes an escaped version of a string to the writer.
-func escapeString(w XMLWriter, s string, m escapeMode) {
+func escapeString(w Writer, s string, m escapeMode) {
 	var esc []byte
 	last := 0
 	for i := 0; i < len(s); {

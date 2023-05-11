@@ -5,6 +5,7 @@
 package etree
 
 import (
+	"bytes"
 	"encoding/xml"
 	"io"
 	"strings"
@@ -808,7 +809,8 @@ func TestIndentWithDefaultSettings(t *testing.T) {
 		t.Error("etree: failed to read string")
 	}
 
-	doc.IndentWithSettings(NewIndentSettings())
+	settings := NewIndentSettings()
+	doc.IndentWithSettings(settings)
 	s, err := doc.WriteToString()
 	if err != nil {
 		t.Error("etree: failed to serialize document")
@@ -907,7 +909,7 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 		s := NewIndentSettings()
 		s.Spaces = 2
 		s.PreserveLeafWhitespace = true
-		s.SuppressTrailingNewline = true
+		s.SuppressTrailingWhitespace = true
 		doc.IndentWithSettings(s)
 
 		output, err := doc.WriteToString()
@@ -949,7 +951,7 @@ func TestPreserveCData(t *testing.T) {
 			t.Error("etree: failed to read string")
 		}
 
-		output, err := doc.WriteToString()
+		output, _ := doc.WriteToString()
 		checkStrEq(t, output, test.expectedWithPreserve)
 	}
 
@@ -961,7 +963,7 @@ func TestPreserveCData(t *testing.T) {
 			t.Error("etree: failed to read string")
 		}
 
-		output, err := doc.WriteToString()
+		output, _ := doc.WriteToString()
 		checkStrEq(t, output, test.expectedWithoutPreserve)
 	}
 }
@@ -1325,4 +1327,34 @@ func TestWhitespace(t *testing.T) {
 
 	cd.SetData("")
 	checkBoolEq(t, cd.IsWhitespace(), true)
+}
+
+func TestTokenWriteTo(t *testing.T) {
+	s := `<store>
+	<!-- comment -->
+	<book>
+		<title>Great Expectations</title>
+	</book>
+</store>`
+	doc := newDocumentFromString(t, s)
+
+	writeSettings := WriteSettings{}
+	indentSettings := IndentSettings{UseTabs: true}
+
+	tests := []struct {
+		path     string
+		expected string
+	}{
+		{"//store", "<store>\n\t<!-- comment -->\n\t<book>\n\t\t<title>Great Expectations</title>\n\t</book>\n</store>"},
+		{"//store/book", "<book>\n\t<title>Great Expectations</title>\n</book>"},
+		{"//store/book/title", "<title>Great Expectations</title>"},
+	}
+	for _, test := range tests {
+		var buffer bytes.Buffer
+
+		c := doc.FindElement(test.path)
+		c.IndentWithSettings(&indentSettings)
+		c.WriteTo(&buffer, &writeSettings)
+		checkStrEq(t, buffer.String(), test.expected)
+	}
 }
