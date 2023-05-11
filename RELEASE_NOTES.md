@@ -1,3 +1,14 @@
+Release v1.2.0
+==============
+
+**New Features**
+
+* Add the ability to write XML fragments using Token WriteTo functions.
+* Add the ability to re-indent an XML element as though it were the root of
+  the document.
+* Add a ReadSettings option to preserve CDATA blocks when reading and XML
+  document.
+
 Release v1.1.4
 ==============
 
