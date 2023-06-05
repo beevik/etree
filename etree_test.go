@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"io"
+	"math/rand"
 	"strings"
 	"testing"
 )
@@ -1356,5 +1357,40 @@ func TestTokenWriteTo(t *testing.T) {
 		c.IndentWithSettings(&indentSettings)
 		c.WriteTo(&buffer, &writeSettings)
 		checkStrEq(t, buffer.String(), test.expected)
+	}
+}
+
+func TestReindexChildren(t *testing.T) {
+	s := `<root>
+	<child1/>
+	<child2/>
+	<child3/>
+	<child4/>
+	<child5/>
+</root>`
+	doc := newDocumentFromString(t, s)
+	doc.Unindent()
+
+	root := doc.Root()
+	if root == nil || root.Tag != "root" || len(root.Child) != 5 {
+		t.Error("etree: expected root element not found")
+	}
+
+	for i := 0; i < len(root.Child); i++ {
+		if root.Child[i].Index() != i {
+			t.Error("etree: incorrect child index found in root element child")
+		}
+	}
+
+	rand.Shuffle(len(root.Child), func(i, j int) {
+		root.Child[i], root.Child[j] = root.Child[j], root.Child[i]
+	})
+
+	root.ReindexChildren()
+
+	for i := 0; i < len(root.Child); i++ {
+		if root.Child[i].Index() != i {
+			t.Error("etree: incorrect child index found in root element child")
+		}
 	}
 }

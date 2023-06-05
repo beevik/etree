@@ -549,6 +549,15 @@ func (e *Element) name() string {
 	return e.Tag
 }
 
+// ReindexChildren recalculates the index values of the element's child
+// tokens. This is necessary only if you have manually manipulated the
+// element's `Child` array.
+func (e *Element) ReindexChildren() {
+	for i := 0; i < len(e.Child); i++ {
+		e.Child[i].setIndex(i)
+	}
+}
+
 // Text returns all character data immediately following the element's opening
 // tag.
 func (e *Element) Text() string {
