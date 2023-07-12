@@ -1394,3 +1394,64 @@ func TestReindexChildren(t *testing.T) {
 		}
 	}
 }
+
+func TestPreserveDuplicateAttrs(t *testing.T) {
+	s := `
+		<document attr="test" attr="test2"></document>
+	`
+	t.Run("Test DontOverwriteDoubledAttributes", func(t *testing.T) {
+		doc := NewDocument()
+
+		doc.ReadSettings = ReadSettings{
+			PreserveDuplicateAttrs: true,
+		}
+
+		err := doc.ReadFromString(s)
+		if err != nil {
+			t.Error("etree: unable to read document", err)
+		}
+
+		document := doc.FindElement("document")
+
+		if len(document.Attr) != 2 {
+			t.Error("etree: should have found 2 attributes")
+		}
+
+		if document.Attr[0].Value != "test" {
+			t.Errorf("etree: expected value test got %s", document.Attr[0].Value)
+		}
+
+		if document.Attr[0].Key != "attr" {
+			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
+		}
+
+		if document.Attr[1].Value != "test2" {
+			t.Errorf("etree: expected value test2 got %s", document.Attr[0].Value)
+		}
+
+		if document.Attr[1].Key != "attr" {
+			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
+		}
+
+	})
+
+	t.Run("Test Default Settings", func(t *testing.T) {
+		doc := NewDocument()
+
+		doc.ReadSettings = ReadSettings{
+			PreserveDuplicateAttrs: false,
+		}
+
+		err := doc.ReadFromString(s)
+		if err != nil {
+			t.Error("etree: unable to read document", err)
+		}
+
+		document := doc.FindElement("document")
+
+		if len(document.Attr) != 1 {
+			t.Error("etree: should have found 1 attribute")
+		}
+	})
+
+}

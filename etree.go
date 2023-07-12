@@ -46,6 +46,10 @@ type ReadSettings struct {
 	// false.
 	PreserveCData bool
 
+	// When an element has two or more attributes with the same name,
+	// preserve them instead of keeping only one. Default: false.
+	PreserveDuplicateAttrs bool
+
 	// Entity to be passed to standard xml.Decoder. Default: nil.
 	Entity map[string]string
 }
@@ -836,7 +840,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		case xml.StartElement:
 			e := newElement(t.Name.Space, t.Name.Local, top)
 			for _, a := range t.Attr {
-				e.createAttr(a.Name.Space, a.Name.Local, a.Value, e)
+				e.createAttr(a.Name.Space, a.Name.Local, a.Value, e, settings.PreserveDuplicateAttrs)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -1232,13 +1236,16 @@ func (e *Element) addChild(t Token) {
 // prefix followed by a colon.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
-	return e.createAttr(space, skey, value, e)
+	return e.createAttr(space, skey, value, e, false)
 }
 
 // createAttr is a helper function that creates attributes.
-func (e *Element) createAttr(space, key, value string, parent *Element) *Attr {
+func (e *Element) createAttr(space, key, value string, parent *Element, preserveDups bool) *Attr {
 	for i, a := range e.Attr {
 		if space == a.Space && key == a.Key {
+			if preserveDups {
+				break
+			}
 			e.Attr[i].Value = value
 			return &e.Attr[i]
 		}
