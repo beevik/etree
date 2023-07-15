@@ -14,11 +14,16 @@ import (
 )
 
 func newDocumentFromString(t *testing.T, s string) *Document {
+	return newDocumentFromString2(t, s, ReadSettings{})
+}
+
+func newDocumentFromString2(t *testing.T, s string, settings ReadSettings) *Document {
 	t.Helper()
 	doc := NewDocument()
+	doc.ReadSettings = settings
 	err := doc.ReadFromString(s)
 	if err != nil {
-		t.Error("etree: failed to parse document")
+		t.Fatal("etree: failed to parse document")
 	}
 	return doc
 }
@@ -239,23 +244,58 @@ func TestImbalancedXML(t *testing.T) {
 	}
 }
 
-func TestDocumentReadNonUTF8Encodings(t *testing.T) {
-	s := `<?xml version="1.0" encoding="ISO-8859-1"?>
-<store>
-	<book lang="en">
-		<title>Great Expectations</title>
-		<author>Charles Dickens</author>
-	</book>
-</store>`
+func TestDocumentCharsetReader(t *testing.T) {
+	s := `<?xml version="1.0" encoding="lowercase"?>
+<Store>
+	<Book Lang="en">
+		<Title>Great Expectations</Title>
+		<Author>Charles Dickens</Author>
+	</Book>
+</Store>`
 
-	doc := NewDocument()
-	doc.ReadSettings.CharsetReader = func(label string, input io.Reader) (io.Reader, error) {
-		return input, nil
+	charsetLabel := ""
+	doc := newDocumentFromString2(t, s, ReadSettings{
+		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
+			charsetLabel = label
+			return &lowercaseCharsetReader{input}, nil
+		},
+	})
+	if charsetLabel != "lowercase" {
+		t.Fatalf("etree: incorrect charset encoding, expected lowercase, got %s", charsetLabel)
 	}
-	err := doc.ReadFromString(s)
+
+	cases := []struct {
+		path string
+		text string
+	}{
+		{"/store/book/title", "great expectations"},
+		{"/store/book/author", "charles dickens"},
+	}
+	for _, c := range cases {
+		e := doc.FindElement(c.path)
+		if e == nil {
+			t.Errorf("etree: failed to find element '%s'", c.path)
+		} else if e.Text() != c.text {
+			t.Errorf("etree: expected path '%s' to contain '%s', got '%s'", c.path, c.text, e.Text())
+		}
+	}
+}
+
+type lowercaseCharsetReader struct {
+	r io.Reader
+}
+
+func (c *lowercaseCharsetReader) Read(p []byte) (n int, err error) {
+	n, err = c.r.Read(p)
 	if err != nil {
-		t.Fatal("etree: incorrect ReadFromString result")
+		return n, err
 	}
+	for i := 0; i < n; i++ {
+		if p[i] >= 'A' && p[i] <= 'Z' {
+			p[i] = p[i] - 'A' + 'a'
+		}
+	}
+	return n, nil
 }
 
 func TestDocumentReadPermissive(t *testing.T) {
@@ -945,25 +985,13 @@ func TestPreserveCData(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		doc := NewDocument()
-		doc.ReadSettings.PreserveCData = true
-		err := doc.ReadFromString(test.input)
-		if err != nil {
-			t.Error("etree: failed to read string")
-		}
-
+		doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: true})
 		output, _ := doc.WriteToString()
 		checkStrEq(t, output, test.expectedWithPreserve)
 	}
 
 	for _, test := range tests {
-		doc := NewDocument()
-		doc.ReadSettings.PreserveCData = false
-		err := doc.ReadFromString(test.input)
-		if err != nil {
-			t.Error("etree: failed to read string")
-		}
-
+		doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: false})
 		output, _ := doc.WriteToString()
 		checkStrEq(t, output, test.expectedWithoutPreserve)
 	}
@@ -1396,70 +1424,45 @@ func TestReindexChildren(t *testing.T) {
 }
 
 func TestPreserveDuplicateAttrs(t *testing.T) {
-	s := `
-		<document attr="test" attr="test2"></document>
-	`
-	t.Run("Test PreserveDuplicateAttributes", func(t *testing.T) {
-		doc := NewDocument()
+	s := `<element attr="test" attr="test2"/>`
 
-		doc.ReadSettings = ReadSettings{
-			PreserveDuplicateAttrs: true,
+	checkAttrCount := func(e *Element, n int) {
+		if len(e.Attr) != n {
+			t.Errorf("etree: expected %d attributes, got %d", n, len(e.Attr))
 		}
-
-		err := doc.ReadFromString(s)
-		if err != nil {
-			t.Error("etree: unable to read document", err)
+	}
+	checkAttr := func(e *Element, i int, key, value string) {
+		if i >= len(e.Attr) {
+			t.Errorf("etree: attr[%d] out of bounds", i)
+			return
 		}
-
-		document := doc.FindElement("document")
-
-		if len(document.Attr) != 2 {
-			t.Error("etree: should have found 2 attributes")
+		if e.Attr[i].Key != key {
+			t.Errorf("etree: attr[%d] expected key %s, got %s", i, key, e.Attr[i].Key)
 		}
-
-		if document.Attr[0].Value != "test" {
-			t.Errorf("etree: expected value test got %s", document.Attr[0].Value)
+		if e.Attr[i].Value != value {
+			t.Errorf("etree: attr[%d] expected value %s, got %s", i, value, e.Attr[i].Value)
 		}
+	}
 
-		if document.Attr[0].Key != "attr" {
-			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
-		}
-
-		if document.Attr[1].Value != "test2" {
-			t.Errorf("etree: expected value test2 got %s", document.Attr[0].Value)
-		}
-
-		if document.Attr[1].Key != "attr" {
-			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
-		}
-
+	t.Run("enabled", func(t *testing.T) {
+		doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: true})
+		e := doc.FindElement("element")
+		checkAttrCount(e, 2)
+		checkAttr(e, 0, "attr", "test")
+		checkAttr(e, 1, "attr", "test2")
 	})
 
-	t.Run("Test Default Settings", func(t *testing.T) {
-		doc := NewDocument()
-
-		doc.ReadSettings = ReadSettings{
-			PreserveDuplicateAttrs: false,
-		}
-
-		err := doc.ReadFromString(s)
-		if err != nil {
-			t.Error("etree: unable to read document", err)
-		}
-
-		document := doc.FindElement("document")
-
-		if len(document.Attr) != 1 {
-			t.Error("etree: should have found 1 attribute")
-		}
-		if document.Attr[0].Value != "test2" {
-			t.Errorf("etree: expected value test got %s", document.Attr[0].Value)
-		}
-
-		if document.Attr[0].Key != "attr" {
-			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
-		}
-
+	t.Run("disabled", func(t *testing.T) {
+		doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: false})
+		e := doc.FindElement("element")
+		checkAttrCount(e, 1)
+		checkAttr(e, 0, "attr", "test2")
 	})
 
+	t.Run("default", func(t *testing.T) {
+		doc := newDocumentFromString(t, s)
+		e := doc.FindElement("element")
+		checkAttrCount(e, 1)
+		checkAttr(e, 0, "attr", "test2")
+	})
 }
