@@ -1241,15 +1241,15 @@ func (e *Element) CreateAttr(key, value string) *Attr {
 
 // createAttr is a helper function that creates attributes.
 func (e *Element) createAttr(space, key, value string, parent *Element, preserveDups bool) *Attr {
-	for i, a := range e.Attr {
-		if space == a.Space && key == a.Key {
-			if preserveDups {
-				break
+	if !preserveDups {
+		for i, a := range e.Attr {
+			if space == a.Space && key == a.Key {
+				e.Attr[i].Value = value
+				return &e.Attr[i]
 			}
-			e.Attr[i].Value = value
-			return &e.Attr[i]
 		}
 	}
+
 	a := Attr{
 		Space:   space,
 		Key:     key,

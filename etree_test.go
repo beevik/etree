@@ -1399,7 +1399,7 @@ func TestPreserveDuplicateAttrs(t *testing.T) {
 	s := `
 		<document attr="test" attr="test2"></document>
 	`
-	t.Run("Test DontOverwriteDoubledAttributes", func(t *testing.T) {
+	t.Run("Test PreserveDuplicateAttributes", func(t *testing.T) {
 		doc := NewDocument()
 
 		doc.ReadSettings = ReadSettings{
@@ -1452,6 +1452,14 @@ func TestPreserveDuplicateAttrs(t *testing.T) {
 		if len(document.Attr) != 1 {
 			t.Error("etree: should have found 1 attribute")
 		}
+		if document.Attr[0].Value != "test2" {
+			t.Errorf("etree: expected value test got %s", document.Attr[0].Value)
+		}
+
+		if document.Attr[0].Key != "attr" {
+			t.Errorf("etree: expected attribute key to be attr got %s", document.Attr[0].Key)
+		}
+
 	})
 
 }
