@@ -118,6 +118,7 @@ var tests = []test{
 	{"./bookstore/book[@category='WEB']/title", []string{"XQuery Kick Start", "Learning XML"}},
 	{"./bookstore/book[@path='/books/xml']/title", []string{"Learning XML"}},
 	{"./bookstore/book[@category='COOKING']/title[@lang='en']", "Everyday Italian"},
+	{`./bookstore/book[@category="COOKING"]/title[@lang="en"]`, "Everyday Italian"},
 	{"./bookstore/book/title[@lang='en'][@sku='150']", "Harry Potter"},
 	{"./bookstore/book/title[@lang='fr']", nil},
 	{"//p:price[@p:tax='1.99']", []string{"29.99"}},
@@ -144,6 +145,8 @@ var tests = []test{
 	{"./bookstore/book[]", errorResult("etree: path contains an empty filter expression.")},
 	{"./bookstore/book[@category='WEB'", errorResult("etree: path has invalid filter [brackets].")},
 	{"./bookstore/book[@category='WEB]", errorResult("etree: path has mismatched filter quotes.")},
+	{`./bookstore/book[@category='WEB"]`, errorResult("etree: path has mismatched filter quotes.")},
+	{`./bookstore/book[@category="WEB']`, errorResult("etree: path has mismatched filter quotes.")},
 	{"./bookstore/book[author]a", errorResult("etree: path has invalid filter [brackets].")},
 	{"/][", errorResult("etree: path has invalid filter [brackets].")},
 }
