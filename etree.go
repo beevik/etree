@@ -1186,6 +1186,21 @@ func (e *Element) Index() int {
 	return e.index
 }
 
+// OrDefault returns a pointer to the receiver e if it is not nil. If the
+// receiver e is nil, OrDefault creates a new empty element with the specified
+// tag and returns a pointer to that instead.
+//
+// OrDefault is useful as a way to avoid checking an element return value for
+// nil before chaining another element function. For example:
+//
+//	e.SelectElement("foo").OrDefault("").SetText("data")
+func (e *Element) OrDefault(tag string) *Element {
+	if e == nil {
+		return NewElement(tag)
+	}
+	return e
+}
+
 // WriteTo serializes the element to the writer w.
 func (e *Element) WriteTo(w Writer, s *WriteSettings) {
 	w.WriteByte('<')

@@ -63,6 +63,13 @@ func checkElementEq(t *testing.T, got, want *Element) {
 	}
 }
 
+func checkElementNotNil(t *testing.T, e *Element) {
+	t.Helper()
+	if e == nil {
+		t.Errorf("etree: unexpected nil element. Got: %v.\n", e)
+	}
+}
+
 func checkDocEq(t *testing.T, doc *Document, expected string) {
 	t.Helper()
 	doc.Indent(NoIndent)
@@ -1465,4 +1472,25 @@ func TestPreserveDuplicateAttrs(t *testing.T) {
 		checkAttrCount(e, 1)
 		checkAttr(e, 0, "attr", "test2")
 	})
+}
+
+func TestOrDefault(t *testing.T) {
+	s := `<Store><Book Lang="en"/></Store>`
+	doc := newDocumentFromString(t, s)
+
+	e := doc.FindElement("/Store/Book").OrDefault("x")
+	checkElementNotNil(t, e)
+	checkStrEq(t, e.Tag, "Book")
+
+	e = doc.FindElement("/Store/Cashier").OrDefault("x")
+	checkElementNotNil(t, e)
+	checkStrEq(t, e.Tag, "x")
+
+	doc.FindElement("/Store/Book").OrDefault("x").SetText("foo")
+	text := doc.FindElement("/Store/Book").Text()
+	checkStrEq(t, text, "foo")
+
+	doc.FindElement("/Store/Cashier").OrDefault("x").SetText("foo")
+	text = doc.FindElement("/Store/Cashier").OrDefault("x").Text()
+	checkStrEq(t, text, "")
 }
