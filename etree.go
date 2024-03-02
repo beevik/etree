@@ -364,9 +364,35 @@ func (d *Document) ReadFromBytes(b []byte) error {
 	return err
 }
 
+// ReadFromBytesSafe is a safer version of ReadFromBytes that validates the
+// provided byte slice for proper XML formatting before using it to prepare a
+// Document. Because of the extra validation, this function is slower than
+// ReadFromBytes.
+func (d *Document) ReadFromBytesSafe(b []byte) error {
+	err := xml.Unmarshal(b, new(interface{}))
+	if err != nil {
+		return err
+	}
+	_, err = d.ReadFrom(bytes.NewReader(b))
+	return err
+}
+
 // ReadFromString reads XML from the string 's' into this document.
 func (d *Document) ReadFromString(s string) error {
 	_, err := d.ReadFrom(strings.NewReader(s))
+	return err
+}
+
+// ReadFromStringSafe is a safer version of ReadFromString that validates the
+// provided string for proper XML formatting before using it to prepare a
+// Document. Because of the extra validation, this function is slower than
+// ReadFromString.
+func (d *Document) ReadFromStringSafe(s string) error {
+	err := xml.Unmarshal([]byte(s), new(interface{}))
+	if err != nil {
+		return err
+	}
+	_, err = d.ReadFrom(strings.NewReader(s))
 	return err
 }
 
@@ -1340,6 +1366,13 @@ func (a *Attr) WriteTo(w Writer, s *WriteSettings) {
 	} else {
 		w.WriteByte('"')
 	}
+}
+
+func (e *Element) NotNil() *Element {
+	if e == nil {
+		return NewElement("")
+	}
+	return e
 }
 
 // NewText creates an unparented CharData token containing simple text data.
