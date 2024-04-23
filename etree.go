@@ -52,6 +52,12 @@ type ReadSettings struct {
 
 	// Entity to be passed to standard xml.Decoder. Default: nil.
 	Entity map[string]string
+
+	// When Permissive is true, AutoClose indicates a set of elements to
+	// consider closed immediately after they are opened, regardless of
+	// whether an end element is present. Commonly set to xml.HTMLAutoClose.
+	// Default: nil.
+	AutoClose []string
 }
 
 // newReadSettings creates a default ReadSettings record.
@@ -796,6 +802,27 @@ func (e *Element) RemoveChildAt(index int) Token {
 	return t
 }
 
+// autoClose analyzes the stack's top element and the current token to decide
+// whether the top element should be closed.
+func (e *Element) autoClose(stack *stack, t xml.Token, tags []string) {
+	if stack.empty() {
+		return
+	}
+
+	top := stack.peek().(*Element)
+
+	for _, tag := range tags {
+		if strings.EqualFold(tag, top.FullTag()) {
+			if e, ok := t.(xml.EndElement); !ok ||
+				!strings.EqualFold(e.Name.Space, top.Space) ||
+				!strings.EqualFold(e.Name.Local, top.Tag) {
+				stack.pop()
+			}
+			break
+		}
+	}
+}
+
 // ReadFrom reads XML from the reader 'ri' and stores the result as a new
 // child of this element.
 func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err error) {
@@ -821,6 +848,10 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		}
 
 		t, err := dec.RawToken()
+
+		if settings.Permissive && settings.AutoClose != nil {
+			e.autoClose(&stack, t, settings.AutoClose)
+		}
 
 		switch {
 		case err == io.EOF:
