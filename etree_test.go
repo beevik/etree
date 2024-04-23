@@ -348,6 +348,47 @@ func TestDocumentReadHTMLEntities(t *testing.T) {
 	}
 }
 
+func TestDocumentReadHTMLAutoClose(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"empty", ``, ``},
+		{"oneSelfClosing", `<br>`, `<br/>`},
+		{"twoSelfClosingAndText", `<br>some text<br>`, `<br/>some text<br/>`},
+		{
+			name: "largerExample",
+			input: `
+<img src="cover.jpg">
+<hr>
+Author: Charles Dickens<br>
+Book: Great Expectations<br>`,
+			want: `
+<img src="cover.jpg"/>
+<hr/>
+Author: Charles Dickens<br/>
+Book: Great Expectations<br/>`},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			doc := NewDocument()
+			doc.ReadSettings.Permissive = true
+			doc.ReadSettings.AutoClose = xml.HTMLAutoClose
+			err := doc.ReadFromString(c.input)
+			if err != nil {
+				t.Fatal("etree: ReadFromString() error = ", err)
+			}
+			s, err := doc.WriteToString()
+			if err != nil {
+				t.Fatal("etree: WriteToString() error = ", err)
+			}
+			checkStrEq(t, s, c.want)
+		})
+	}
+}
+
 func TestEscapeCodes(t *testing.T) {
 	cases := []struct {
 		input         string
