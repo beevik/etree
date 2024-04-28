@@ -358,9 +358,14 @@ func (d *Document) SetRoot(e *Element) {
 // returns the number of bytes read and any error encountered.
 func (d *Document) ReadFrom(r io.Reader) (n int64, err error) {
 	if d.ReadSettings.ValidateInput {
-		if err := validateXML(r, d.ReadSettings); err != nil {
+		b, err := io.ReadAll(r)
+		if err != nil {
 			return 0, err
 		}
+		if err := validateXML(bytes.NewReader(b), d.ReadSettings); err != nil {
+			return 0, err
+		}
+		r = bytes.NewReader(b)
 	}
 	return d.Element.readFrom(r, d.ReadSettings)
 }
@@ -373,19 +378,30 @@ func (d *Document) ReadFromFile(filepath string) error {
 		return err
 	}
 	defer f.Close()
+
 	_, err = d.ReadFrom(f)
 	return err
 }
 
 // ReadFromBytes reads XML from the byte slice 'b' into the this document.
 func (d *Document) ReadFromBytes(b []byte) error {
-	_, err := d.ReadFrom(bytes.NewReader(b))
+	if d.ReadSettings.ValidateInput {
+		if err := validateXML(bytes.NewReader(b), d.ReadSettings); err != nil {
+			return err
+		}
+	}
+	_, err := d.Element.readFrom(bytes.NewReader(b), d.ReadSettings)
 	return err
 }
 
 // ReadFromString reads XML from the string 's' into this document.
 func (d *Document) ReadFromString(s string) error {
-	_, err := d.ReadFrom(strings.NewReader(s))
+	if d.ReadSettings.ValidateInput {
+		if err := validateXML(strings.NewReader(s), d.ReadSettings); err != nil {
+			return err
+		}
+	}
+	_, err := d.Element.readFrom(strings.NewReader(s), d.ReadSettings)
 	return err
 }
 

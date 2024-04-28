@@ -7,8 +7,12 @@ package etree
 import (
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"io"
+	"io/fs"
 	"math/rand"
+	"os"
+	"path"
 	"strings"
 	"testing"
 )
@@ -1540,19 +1544,46 @@ func TestValidateInput(t *testing.T) {
 		{`<root><child>x</child></root1>`, `XML syntax error on line 1: element <root> closed by </root1>`},
 	}
 
-	for i, test := range tests {
-		doc := NewDocument()
-		doc.ReadSettings.ValidateInput = true
-		err := doc.ReadFromString(test.s)
-		if err == nil {
-			if test.err != "" {
-				t.Errorf("etree: test #%d:\nExpected error:\n  %s\nReceived error:\n  nil", i, test.err)
-			}
-		} else {
-			te := err.Error()
-			if te != test.err {
-				t.Errorf("etree: test #%d:\nExpected error;\n  %s\nReceived error:\n  %s", i, test.err, te)
+	type readFunc func(doc *Document, s string) error
+	runTests := func(t *testing.T, read readFunc) {
+		for i, test := range tests {
+			doc := NewDocument()
+			doc.ReadSettings.ValidateInput = true
+			err := read(doc, test.s)
+			if err == nil {
+				if test.err != "" {
+					t.Errorf("etree: test #%d:\nExpected error:\n  %s\nReceived error:\n  nil", i, test.err)
+				}
+				root := doc.Root()
+				if root == nil || root.Tag != "root" {
+					t.Errorf("etree: test #%d: failed to read document after input validation", i)
+				}
+			} else {
+				te := err.Error()
+				if te != test.err {
+					t.Errorf("etree: test #%d:\nExpected error;\n  %s\nReceived error:\n  %s", i, test.err, te)
+				}
 			}
 		}
 	}
+
+	readFromString := func(doc *Document, s string) error {
+		return doc.ReadFromString(s)
+	}
+	t.Run("ReadFromString", func(t *testing.T) { runTests(t, readFromString) })
+
+	readFromBytes := func(doc *Document, s string) error {
+		return doc.ReadFromBytes([]byte(s))
+	}
+	t.Run("ReadFromBytes", func(t *testing.T) { runTests(t, readFromBytes) })
+
+	readFromFile := func(doc *Document, s string) error {
+		pathtmp := path.Join(t.TempDir(), "etree-test")
+		err := os.WriteFile(pathtmp, []byte(s), fs.ModePerm)
+		if err != nil {
+			return errors.New("unable to write tmp file for input validation")
+		}
+		return doc.ReadFromFile(pathtmp)
+	}
+	t.Run("ReadFromFile", func(t *testing.T) { runTests(t, readFromFile) })
 }
