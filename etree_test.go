@@ -1524,3 +1524,35 @@ func TestNotNil(t *testing.T) {
 		t.Error("got:\n" + got)
 	}
 }
+
+func TestValidateInput(t *testing.T) {
+	tests := []struct {
+		s   string
+		err string
+	}{
+		{`<root>x</root>`, ""},
+		{`<root/>`, ""},
+		{`<root>x`, `XML syntax error on line 1: unexpected EOF`},
+		{`</root><root>`, `XML syntax error on line 1: unexpected end element </root>`},
+		{`<>`, `XML syntax error on line 1: expected element name after <`},
+		{`<root>x</root>trailing`, "etree: invalid XML format"},
+		{`<root>x</root><`, "etree: invalid XML format"},
+		{`<root><child>x</child></root1>`, `XML syntax error on line 1: element <root> closed by </root1>`},
+	}
+
+	for i, test := range tests {
+		doc := NewDocument()
+		doc.ReadSettings.ValidateInput = true
+		err := doc.ReadFromString(test.s)
+		if err == nil {
+			if test.err != "" {
+				t.Errorf("etree: test #%d:\nExpected error:\n  %s\nReceived error:\n  nil", i, test.err)
+			}
+		} else {
+			te := err.Error()
+			if te != test.err {
+				t.Errorf("etree: test #%d:\nExpected error;\n  %s\nReceived error:\n  %s", i, test.err, te)
+			}
+		}
+	}
+}
