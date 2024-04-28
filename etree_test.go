@@ -1505,3 +1505,22 @@ func TestPreserveDuplicateAttrs(t *testing.T) {
 		checkAttr(e, 0, "attr", "test2")
 	})
 }
+
+func TestNotNil(t *testing.T) {
+	s := `<enabled>true</enabled>`
+
+	doc := newDocumentFromString(t, s)
+	doc.SelectElement("enabled").NotNil().SetText("false")
+	doc.SelectElement("visible").NotNil().SetText("true")
+
+	want := `<enabled>false</enabled>`
+	got, err := doc.WriteToString()
+	if err != nil {
+		t.Fatal("etree: failed to write document to string")
+	}
+	if got != want {
+		t.Error("etree: unexpected NotNil result")
+		t.Error("wanted:\n" + want)
+		t.Error("got:\n" + got)
+	}
+}

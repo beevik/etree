@@ -1001,6 +1001,25 @@ func (e *Element) FindElementsPath(path Path) []*Element {
 	return p.traverse(e, path)
 }
 
+// NotNil returns the receiver element if it isn't nil; otherwise, it returns
+// an unparented element with an empty string tag. This function simplifies
+// the task of writing code to ignore not-found results from element queries.
+// For example, instead of writing this:
+//
+//	if e := doc.SelectElement("enabled"); e != nil {
+//		e.SetText("true")
+//	}
+//
+// You could write this:
+//
+//	doc.SelectElement("enabled").NotNil().SetText("true")
+func (e *Element) NotNil() *Element {
+	if e == nil {
+		return NewElement("")
+	}
+	return e
+}
+
 // GetPath returns the absolute path of the element. The absolute path is the
 // full path from the document's root.
 func (e *Element) GetPath() string {
