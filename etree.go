@@ -73,9 +73,6 @@ func newReadSettings() ReadSettings {
 		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
 			return input, nil
 		},
-		Permissive:    false,
-		PreserveCData: false,
-		Entity:        nil,
 	}
 }
 
