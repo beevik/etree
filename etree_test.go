@@ -225,7 +225,7 @@ func TestDocument(t *testing.T) {
 	}
 }
 
-func TestImbalancedXML(t *testing.T) {
+func TestUnbalancedElements(t *testing.T) {
 	cases := []string{
 		`<test>`,
 		`</test>`,
@@ -248,8 +248,9 @@ func TestImbalancedXML(t *testing.T) {
 	}
 }
 
-func TestDocumentCharsetReader(t *testing.T) {
-	s := `<?xml version="1.0" encoding="lowercase"?>
+func TestReadSettings(t *testing.T) {
+	t.Run("CharSetReader", func(t *testing.T) {
+		s := `<?xml version="1.0" encoding="lowercase"?>
 <Store>
 	<Book Lang="en">
 		<Title>Great Expectations</Title>
@@ -257,30 +258,243 @@ func TestDocumentCharsetReader(t *testing.T) {
 	</Book>
 </Store>`
 
-	doc := newDocumentFromString2(t, s, ReadSettings{
-		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
-			if label == "lowercase" {
-				return &lowercaseCharsetReader{input}, nil
+		doc := newDocumentFromString2(t, s, ReadSettings{
+			CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
+				if label == "lowercase" {
+					return &lowercaseCharsetReader{input}, nil
+				}
+				return nil, errors.New("unknown charset")
+			},
+		})
+
+		cases := []struct {
+			path string
+			text string
+		}{
+			{"/store/book/title", "great expectations"},
+			{"/store/book/author", "charles dickens"},
+		}
+		for _, c := range cases {
+			e := doc.FindElement(c.path)
+			if e == nil {
+				t.Errorf("etree: failed to find element '%s'", c.path)
+			} else if e.Text() != c.text {
+				t.Errorf("etree: expected path '%s' to contain '%s', got '%s'", c.path, c.text, e.Text())
 			}
-			return nil, errors.New("unknown charset")
-		},
+		}
 	})
 
-	cases := []struct {
-		path string
-		text string
-	}{
-		{"/store/book/title", "great expectations"},
-		{"/store/book/author", "charles dickens"},
-	}
-	for _, c := range cases {
-		e := doc.FindElement(c.path)
-		if e == nil {
-			t.Errorf("etree: failed to find element '%s'", c.path)
-		} else if e.Text() != c.text {
-			t.Errorf("etree: expected path '%s' to contain '%s', got '%s'", c.path, c.text, e.Text())
+	t.Run("Permissive", func(t *testing.T) {
+		s := "<select disabled></select>"
+
+		doc := NewDocument()
+		err := doc.ReadFromString(s)
+		if err == nil {
+			t.Fatal("etree: incorrect ReadFromString result")
 		}
-	}
+
+		doc.ReadSettings.Permissive = true
+		err = doc.ReadFromString(s)
+		if err != nil {
+			t.Fatal("etree: incorrect ReadFromString result")
+		}
+	})
+
+	t.Run("PreserveCData", func(t *testing.T) {
+		tests := []struct {
+			input                   string
+			expectedWithPreserve    string
+			expectedWithoutPreserve string
+		}{
+			{
+				"<test><![CDATA[x]]></test>",
+				"<test><![CDATA[x]]></test>",
+				"<test>x</test>",
+			},
+			{
+				"<tag><![CDATA[x <b>foo</b>]]></tag>",
+				"<tag><![CDATA[x <b>foo</b>]]></tag>",
+				"<tag>x &lt;b&gt;foo&lt;/b&gt;</tag>",
+			},
+			{
+				"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
+				"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
+				"<name>My <b>name</b> is</name>",
+			},
+		}
+
+		for _, test := range tests {
+			doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: true})
+			output, _ := doc.WriteToString()
+			checkStrEq(t, output, test.expectedWithPreserve)
+		}
+
+		for _, test := range tests {
+			doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: false})
+			output, _ := doc.WriteToString()
+			checkStrEq(t, output, test.expectedWithoutPreserve)
+		}
+	})
+
+	t.Run("PreserveDuplicateAttrs", func(t *testing.T) {
+		s := `<element x="value1" y="value2" x="value3" x="value4" y="value5"/>`
+
+		checkAttrCount := func(e *Element, n int) {
+			if len(e.Attr) != n {
+				t.Errorf("etree: expected %d attributes, got %d", n, len(e.Attr))
+			}
+		}
+		checkAttr := func(e *Element, i int, key, value string) {
+			if i >= len(e.Attr) {
+				t.Errorf("etree: attr[%d] out of bounds", i)
+				return
+			}
+			if e.Attr[i].Key != key {
+				t.Errorf("etree: attr[%d] expected key %s, got %s", i, key, e.Attr[i].Key)
+			}
+			if e.Attr[i].Value != value {
+				t.Errorf("etree: attr[%d] expected value %s, got %s", i, value, e.Attr[i].Value)
+			}
+		}
+
+		t.Run("enabled", func(t *testing.T) {
+			doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: true})
+			e := doc.FindElement("element")
+			checkAttrCount(e, 5)
+			checkAttr(e, 0, "x", "value1")
+			checkAttr(e, 1, "y", "value2")
+			checkAttr(e, 2, "x", "value3")
+			checkAttr(e, 3, "x", "value4")
+			checkAttr(e, 4, "y", "value5")
+		})
+
+		t.Run("disabled", func(t *testing.T) {
+			doc := newDocumentFromString2(t, s, ReadSettings{})
+			e := doc.FindElement("element")
+			checkAttrCount(e, 2)
+			checkAttr(e, 0, "x", "value4")
+			checkAttr(e, 1, "y", "value5")
+		})
+	})
+
+	t.Run("ValidateInput", func(t *testing.T) {
+		tests := []struct {
+			s   string
+			err string
+		}{
+			{`<root>x</root>`, ""},
+			{`<root/>`, ""},
+			{`<root>x`, `XML syntax error on line 1: unexpected EOF`},
+			{`</root><root>`, `XML syntax error on line 1: unexpected end element </root>`},
+			{`<>`, `XML syntax error on line 1: expected element name after <`},
+			{`<root>x</root>trailing`, "etree: invalid XML format"},
+			{`<root>x</root><`, "etree: invalid XML format"},
+			{`<root><child>x</child></root1>`, `XML syntax error on line 1: element <root> closed by </root1>`},
+		}
+
+		type readFunc func(doc *Document, s string) error
+		runTests := func(t *testing.T, read readFunc) {
+			for i, test := range tests {
+				doc := NewDocument()
+				doc.ReadSettings.ValidateInput = true
+				err := read(doc, test.s)
+				if err == nil {
+					if test.err != "" {
+						t.Errorf("etree: test #%d:\nExpected error:\n  %s\nReceived error:\n  nil", i, test.err)
+					}
+					root := doc.Root()
+					if root == nil || root.Tag != "root" {
+						t.Errorf("etree: test #%d: failed to read document after input validation", i)
+					}
+				} else {
+					te := err.Error()
+					if te != test.err {
+						t.Errorf("etree: test #%d:\nExpected error;\n  %s\nReceived error:\n  %s", i, test.err, te)
+					}
+				}
+			}
+		}
+
+		readFromString := func(doc *Document, s string) error {
+			return doc.ReadFromString(s)
+		}
+		t.Run("ReadFromString", func(t *testing.T) { runTests(t, readFromString) })
+
+		readFromBytes := func(doc *Document, s string) error {
+			return doc.ReadFromBytes([]byte(s))
+		}
+		t.Run("ReadFromBytes", func(t *testing.T) { runTests(t, readFromBytes) })
+
+		readFromFile := func(doc *Document, s string) error {
+			pathtmp := path.Join(t.TempDir(), "etree-test")
+			err := os.WriteFile(pathtmp, []byte(s), fs.ModePerm)
+			if err != nil {
+				return errors.New("unable to write tmp file for input validation")
+			}
+			return doc.ReadFromFile(pathtmp)
+		}
+		t.Run("ReadFromFile", func(t *testing.T) { runTests(t, readFromFile) })
+	})
+
+	t.Run("Entity", func(t *testing.T) {
+		s := `<store>
+	<book lang="en">
+		<title>&rarr;&nbsp;Great Expectations</title>
+		<author>Charles Dickens</author>
+	</book>
+</store>`
+
+		doc := NewDocument()
+		err := doc.ReadFromString(s)
+		if err == nil {
+			t.Fatal("etree: incorrect ReadFromString result")
+		}
+
+		doc.ReadSettings.Entity = xml.HTMLEntity
+		err = doc.ReadFromString(s)
+		if err != nil {
+			t.Fatal("etree: incorrect ReadFromString result")
+		}
+	})
+
+	t.Run("AutoClose", func(t *testing.T) {
+		cases := []struct {
+			name  string
+			input string
+			want  string
+		}{
+			{"EmptyString", "", ""},
+			{"SingleElement", `<br>`, `<br/>`},
+			{"TwoElements", `<br>some text<br>`, `<br/>some text<br/>`},
+			{
+				"MultipleElements",
+				`<img src="cover.jpg">
+<hr>
+Author: Charles Dickens<br>
+Book: Great Expectations<br>`,
+				`<img src="cover.jpg"/>
+<hr/>
+Author: Charles Dickens<br/>
+Book: Great Expectations<br/>`},
+		}
+
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				doc := NewDocument()
+				doc.ReadSettings.Permissive = true
+				doc.ReadSettings.AutoClose = xml.HTMLAutoClose
+				err := doc.ReadFromString(c.input)
+				if err != nil {
+					t.Fatal("etree: ReadFromString() error = ", err)
+				}
+				s, err := doc.WriteToString()
+				if err != nil {
+					t.Fatal("etree: WriteToString() error = ", err)
+				}
+				checkStrEq(t, s, c.want)
+			})
+		}
+	})
 }
 
 type lowercaseCharsetReader struct {
@@ -300,20 +514,93 @@ func (c *lowercaseCharsetReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func TestDocumentReadPermissive(t *testing.T) {
-	s := "<select disabled></select>"
+func TestWriteSettings(t *testing.T) {
+	t.Run("CanonicalEndTags", func(t *testing.T) {
+		doc := NewDocument()
+		doc.CreateElement("element")
 
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err == nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
+		doc.WriteSettings.CanonicalEndTags = true
+		s, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		expected := `<element></element>`
+		checkStrEq(t, s, expected)
 
-	doc.ReadSettings.Permissive = true
-	err = doc.ReadFromString(s)
-	if err != nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
+		doc.WriteSettings.CanonicalEndTags = false
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		expected = `<element/>`
+		checkStrEq(t, s, expected)
+	})
+
+	t.Run("CanonicalText", func(t *testing.T) {
+		doc := NewDocument()
+		element := doc.CreateElement("element")
+		element.SetText("& < > \" ' \t\n\r")
+
+		doc.WriteSettings.CanonicalText = true
+		s, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want := `<element>&amp; &lt; &gt; " ' ` + "\t\n" + `&#xD;</element>`
+		checkStrEq(t, s, want)
+
+		doc.WriteSettings.CanonicalText = false
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want = `<element>&amp; &lt; &gt; &quot; &apos; ` + "\t\n\r" + `</element>`
+		checkStrEq(t, s, want)
+	})
+
+	t.Run("CanonicalAttrVal", func(t *testing.T) {
+		doc := NewDocument()
+		element := doc.CreateElement("element")
+		element.CreateAttr("value", "& < > \" ' \t\n\r")
+
+		doc.WriteSettings.CanonicalAttrVal = true
+		s, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want := `<element value="&amp; &lt; > &quot; ' &#x9;&#xA;&#xD;"/>`
+		checkStrEq(t, s, want)
+
+		doc.WriteSettings.CanonicalAttrVal = false
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want = `<element value="&amp; &lt; &gt; &quot; &apos; ` + "\t\n\r" + `"/>`
+		checkStrEq(t, s, want)
+	})
+
+	t.Run("AttrSingleQuote", func(t *testing.T) {
+		doc := NewDocument()
+		element := doc.CreateElement("element")
+		element.CreateAttr("attr", "value ' ")
+
+		doc.WriteSettings.AttrSingleQuote = true
+		s, err := doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want := `<element attr='value &apos; '/>`
+		checkStrEq(t, s, want)
+
+		doc.WriteSettings.AttrSingleQuote = false
+		s, err = doc.WriteToString()
+		if err != nil {
+			t.Error("etree: WriteToString failed.")
+		}
+		want = `<element attr="value &apos; "/>`
+		checkStrEq(t, s, want)
+	})
 }
 
 func TestEmbeddedComment(t *testing.T) {
@@ -327,66 +614,6 @@ func TestEmbeddedComment(t *testing.T) {
 
 	a := doc.SelectElement("a")
 	checkStrEq(t, a.Text(), "123456")
-}
-
-func TestDocumentReadHTMLEntities(t *testing.T) {
-	s := `<store>
-	<book lang="en">
-		<title>&rarr;&nbsp;Great Expectations</title>
-		<author>Charles Dickens</author>
-	</book>
-</store>`
-
-	doc := NewDocument()
-	err := doc.ReadFromString(s)
-	if err == nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
-
-	doc.ReadSettings.Entity = xml.HTMLEntity
-	err = doc.ReadFromString(s)
-	if err != nil {
-		t.Fatal("etree: incorrect ReadFromString result")
-	}
-}
-
-func TestDocumentReadHTMLAutoClose(t *testing.T) {
-	cases := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{"empty", ``, ``},
-		{"oneSelfClosing", `<br>`, `<br/>`},
-		{"twoSelfClosingAndText", `<br>some text<br>`, `<br/>some text<br/>`},
-		{
-			name: "largerExample",
-			input: `<img src="cover.jpg">
-<hr>
-Author: Charles Dickens<br>
-Book: Great Expectations<br>`,
-			want: `<img src="cover.jpg"/>
-<hr/>
-Author: Charles Dickens<br/>
-Book: Great Expectations<br/>`},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			doc := NewDocument()
-			doc.ReadSettings.Permissive = true
-			doc.ReadSettings.AutoClose = xml.HTMLAutoClose
-			err := doc.ReadFromString(c.input)
-			if err != nil {
-				t.Fatal("etree: ReadFromString() error = ", err)
-			}
-			s, err := doc.WriteToString()
-			if err != nil {
-				t.Fatal("etree: WriteToString() error = ", err)
-			}
-			checkStrEq(t, s, c.want)
-		})
-	}
 }
 
 func TestEscapeCodes(t *testing.T) {
@@ -440,43 +667,6 @@ func TestEscapeCodes(t *testing.T) {
 		}
 		checkStrEq(t, s, c.textCanonical)
 	}
-}
-
-func TestCanonical(t *testing.T) {
-	BOM := "\xef\xbb\xbf"
-
-	doc := NewDocument()
-	doc.WriteSettings.CanonicalEndTags = true
-	doc.WriteSettings.CanonicalText = true
-	doc.WriteSettings.CanonicalAttrVal = true
-	doc.CreateCharData(BOM)
-	doc.CreateProcInst("xml-stylesheet", `type="text/xsl" href="style.xsl"`)
-
-	people := doc.CreateElement("People")
-	people.CreateComment("These are all known people")
-
-	jon := people.CreateElement("Person")
-	jon.CreateAttr("name", "Jon O'Reilly")
-	jon.SetText("\r<'\">&\u0004\u0005\u001f�")
-
-	sally := people.CreateElement("Person")
-	sally.CreateAttr("name", "Sally")
-	sally.CreateAttr("escape", "\r\n\t<'\">&")
-
-	doc.Indent(2)
-	s, err := doc.WriteToString()
-	if err != nil {
-		t.Error("etree: WriteSettings WriteTo produced incorrect result.")
-	}
-
-	expected := BOM + `<?xml-stylesheet type="text/xsl" href="style.xsl"?>
-<People>
-  <!--These are all known people-->
-  <Person name="Jon O'Reilly">&#xD;&lt;'"&gt;&amp;����</Person>
-  <Person name="Sally" escape="&#xD;&#xA;&#x9;&lt;'&quot;>&amp;"></Person>
-</People>
-`
-	checkStrEq(t, s, expected)
 }
 
 func TestCopy(t *testing.T) {
@@ -1006,42 +1196,6 @@ func TestIndentPreserveWhitespace(t *testing.T) {
 	}
 }
 
-func TestPreserveCData(t *testing.T) {
-	tests := []struct {
-		input                   string
-		expectedWithPreserve    string
-		expectedWithoutPreserve string
-	}{
-		{
-			"<test><![CDATA[x]]></test>",
-			"<test><![CDATA[x]]></test>",
-			"<test>x</test>",
-		},
-		{
-			"<tag><![CDATA[x <b>foo</b>]]></tag>",
-			"<tag><![CDATA[x <b>foo</b>]]></tag>",
-			"<tag>x &lt;b&gt;foo&lt;/b&gt;</tag>",
-		},
-		{
-			"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
-			"<name><![CDATA[My]]> <b>name</b> <![CDATA[is]]></name>",
-			"<name>My <b>name</b> is</name>",
-		},
-	}
-
-	for _, test := range tests {
-		doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: true})
-		output, _ := doc.WriteToString()
-		checkStrEq(t, output, test.expectedWithPreserve)
-	}
-
-	for _, test := range tests {
-		doc := newDocumentFromString2(t, test.input, ReadSettings{PreserveCData: false})
-		output, _ := doc.WriteToString()
-		checkStrEq(t, output, test.expectedWithoutPreserve)
-	}
-}
-
 func TestTokenIndexing(t *testing.T) {
 	s := `<?xml version="1.0" encoding="UTF-8"?>
 <?xml-stylesheet type="text/xsl" href="style.xsl"?>
@@ -1468,47 +1622,6 @@ func TestReindexChildren(t *testing.T) {
 	}
 }
 
-func TestPreserveDuplicateAttrs(t *testing.T) {
-	s := `<element x="value1" y="value2" x="value3" x="value4" y="value5"/>`
-
-	checkAttrCount := func(e *Element, n int) {
-		if len(e.Attr) != n {
-			t.Errorf("etree: expected %d attributes, got %d", n, len(e.Attr))
-		}
-	}
-	checkAttr := func(e *Element, i int, key, value string) {
-		if i >= len(e.Attr) {
-			t.Errorf("etree: attr[%d] out of bounds", i)
-			return
-		}
-		if e.Attr[i].Key != key {
-			t.Errorf("etree: attr[%d] expected key %s, got %s", i, key, e.Attr[i].Key)
-		}
-		if e.Attr[i].Value != value {
-			t.Errorf("etree: attr[%d] expected value %s, got %s", i, value, e.Attr[i].Value)
-		}
-	}
-
-	t.Run("enabled", func(t *testing.T) {
-		doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: true})
-		e := doc.FindElement("element")
-		checkAttrCount(e, 5)
-		checkAttr(e, 0, "x", "value1")
-		checkAttr(e, 1, "y", "value2")
-		checkAttr(e, 2, "x", "value3")
-		checkAttr(e, 3, "x", "value4")
-		checkAttr(e, 4, "y", "value5")
-	})
-
-	t.Run("disabled", func(t *testing.T) {
-		doc := newDocumentFromString2(t, s, ReadSettings{})
-		e := doc.FindElement("element")
-		checkAttrCount(e, 2)
-		checkAttr(e, 0, "x", "value4")
-		checkAttr(e, 1, "y", "value5")
-	})
-}
-
 func TestNotNil(t *testing.T) {
 	s := `<enabled>true</enabled>`
 
@@ -1526,65 +1639,6 @@ func TestNotNil(t *testing.T) {
 		t.Error("wanted:\n" + want)
 		t.Error("got:\n" + got)
 	}
-}
-
-func TestValidateInput(t *testing.T) {
-	tests := []struct {
-		s   string
-		err string
-	}{
-		{`<root>x</root>`, ""},
-		{`<root/>`, ""},
-		{`<root>x`, `XML syntax error on line 1: unexpected EOF`},
-		{`</root><root>`, `XML syntax error on line 1: unexpected end element </root>`},
-		{`<>`, `XML syntax error on line 1: expected element name after <`},
-		{`<root>x</root>trailing`, "etree: invalid XML format"},
-		{`<root>x</root><`, "etree: invalid XML format"},
-		{`<root><child>x</child></root1>`, `XML syntax error on line 1: element <root> closed by </root1>`},
-	}
-
-	type readFunc func(doc *Document, s string) error
-	runTests := func(t *testing.T, read readFunc) {
-		for i, test := range tests {
-			doc := NewDocument()
-			doc.ReadSettings.ValidateInput = true
-			err := read(doc, test.s)
-			if err == nil {
-				if test.err != "" {
-					t.Errorf("etree: test #%d:\nExpected error:\n  %s\nReceived error:\n  nil", i, test.err)
-				}
-				root := doc.Root()
-				if root == nil || root.Tag != "root" {
-					t.Errorf("etree: test #%d: failed to read document after input validation", i)
-				}
-			} else {
-				te := err.Error()
-				if te != test.err {
-					t.Errorf("etree: test #%d:\nExpected error;\n  %s\nReceived error:\n  %s", i, test.err, te)
-				}
-			}
-		}
-	}
-
-	readFromString := func(doc *Document, s string) error {
-		return doc.ReadFromString(s)
-	}
-	t.Run("ReadFromString", func(t *testing.T) { runTests(t, readFromString) })
-
-	readFromBytes := func(doc *Document, s string) error {
-		return doc.ReadFromBytes([]byte(s))
-	}
-	t.Run("ReadFromBytes", func(t *testing.T) { runTests(t, readFromBytes) })
-
-	readFromFile := func(doc *Document, s string) error {
-		pathtmp := path.Join(t.TempDir(), "etree-test")
-		err := os.WriteFile(pathtmp, []byte(s), fs.ModePerm)
-		if err != nil {
-			return errors.New("unable to write tmp file for input validation")
-		}
-		return doc.ReadFromFile(pathtmp)
-	}
-	t.Run("ReadFromFile", func(t *testing.T) { runTests(t, readFromFile) })
 }
 
 func TestSiblingElement(t *testing.T) {
