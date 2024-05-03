@@ -1587,3 +1587,46 @@ func TestValidateInput(t *testing.T) {
 	}
 	t.Run("ReadFromFile", func(t *testing.T) { runTests(t, readFromFile) })
 }
+
+func TestSiblingElement(t *testing.T) {
+	doc := newDocumentFromString(t, `<root><a/><b>  <b1/> </b> <!--test--> <c/></root>`)
+
+	root := doc.SelectElement("root")
+	a := root.SelectElement("a")
+	b := root.SelectElement("b")
+	c := root.SelectElement("c")
+	b1 := b.SelectElement("b1")
+
+	tests := []struct {
+		e    *Element
+		next *Element
+		prev *Element
+	}{
+		{root, nil, nil},
+		{a, b, nil},
+		{b, c, a},
+		{c, nil, b},
+		{b1, nil, nil},
+	}
+
+	toString := func(e *Element) string {
+		if e == nil {
+			return "nil"
+		}
+		return e.Tag
+	}
+
+	for i, test := range tests {
+		next := test.e.NextSibling()
+		if next != test.next {
+			t.Errorf("etree: test #%d unexpected NextSibling result.\n  Expected: %s\n  Received: %s\n",
+				i, toString(next), toString(test.next))
+		}
+
+		prev := test.e.PrevSibling()
+		if prev != test.prev {
+			t.Errorf("etree: test #%d unexpected PrevSibling result.\n  Expected: %s\n  Received: %s\n",
+				i, toString(prev), toString(test.prev))
+		}
+	}
+}

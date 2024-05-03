@@ -1274,6 +1274,34 @@ func (e *Element) dup(parent *Element) Token {
 	return ne
 }
 
+// NextSibling returns this element's next sibling element. It returns nil if
+// there is no next sibling element.
+func (e *Element) NextSibling() *Element {
+	if e.parent == nil {
+		return nil
+	}
+	for i := e.index + 1; i < len(e.parent.Child); i++ {
+		if s, ok := e.parent.Child[i].(*Element); ok {
+			return s
+		}
+	}
+	return nil
+}
+
+// PrevSibling returns this element's preceding sibling element. It returns
+// nil if there is no preceding sibling element.
+func (e *Element) PrevSibling() *Element {
+	if e.parent == nil {
+		return nil
+	}
+	for i := e.index - 1; i >= 0; i-- {
+		if s, ok := e.parent.Child[i].(*Element); ok {
+			return s
+		}
+	}
+	return nil
+}
+
 // Parent returns this element's parent element. It returns nil if this
 // element has no parent.
 func (e *Element) Parent() *Element {
