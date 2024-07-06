@@ -13,7 +13,7 @@ import (
 	"errors"
 	"io"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -858,12 +858,12 @@ func (e *Element) RemoveChildAt(index int) Token {
 
 // autoClose analyzes the stack's top element and the current token to decide
 // whether the top element should be closed.
-func (e *Element) autoClose(stack *stack, t xml.Token, tags []string) {
+func (e *Element) autoClose(stack *stack[*Element], t xml.Token, tags []string) {
 	if stack.empty() {
 		return
 	}
 
-	top := stack.peek().(*Element)
+	top := stack.peek()
 
 	for _, tag := range tags {
 		if strings.EqualFold(tag, top.FullTag()) {
@@ -891,7 +891,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 
 	dec := newDecoder(r, settings)
 
-	var stack stack
+	var stack stack[*Element]
 	stack.push(e)
 	for {
 		if pr != nil {
@@ -916,7 +916,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 			return r.Bytes(), ErrXML
 		}
 
-		top := stack.peek().(*Element)
+		top := stack.peek()
 
 		switch t := t.(type) {
 		case xml.StartElement:
@@ -1411,25 +1411,12 @@ func (e *Element) RemoveAttr(key string) *Attr {
 
 // SortAttrs sorts this element's attributes lexicographically by key.
 func (e *Element) SortAttrs() {
-	sort.Sort(byAttr(e.Attr))
-}
-
-type byAttr []Attr
-
-func (a byAttr) Len() int {
-	return len(a)
-}
-
-func (a byAttr) Swap(i, j int) {
-	a[i], a[j] = a[j], a[i]
-}
-
-func (a byAttr) Less(i, j int) bool {
-	sp := strings.Compare(a[i].Space, a[j].Space)
-	if sp == 0 {
-		return strings.Compare(a[i].Key, a[j].Key) < 0
-	}
-	return sp < 0
+	slices.SortFunc(e.Attr, func(a, b Attr) int {
+		if v := strings.Compare(a.Space, b.Space); v != 0 {
+			return v
+		}
+		return strings.Compare(a.Key, b.Key)
+	})
 }
 
 // FullKey returns this attribute's complete key, including namespace prefix
