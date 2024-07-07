@@ -50,11 +50,16 @@ type ReadSettings struct {
 	// preserve them instead of keeping only one. Default: false.
 	PreserveDuplicateAttrs bool
 
-	// ValidateInput forces all ReadFrom* methods to validate that the
-	// provided input is composed of well-formed XML before processing it. If
-	// invalid XML is detected, the ReadFrom* methods return an error. Because
-	// this option requires the input to be processed twice, it incurs a
+	// ValidateInput forces all ReadFrom* functions to validate that the
+	// provided input is composed of "well-formed"(*) XML before processing it.
+	// If invalid XML is detected, the ReadFrom* functions return an error.
+	// Because this option requires the input to be processed twice, it incurs a
 	// significant performance penalty. Default: false.
+	//
+	// (*) Note that this definition of "well-formed" is in the context of the
+	// go standard library's encoding/xml package. Go's encoding/xml package
+	// does not, in fact, guarantee well-formed XML as specified by the W3C XML
+	// recommendation. See: https://github.com/golang/go/issues/68299
 	ValidateInput bool
 
 	// Entity to be passed to standard xml.Decoder. Default: nil.
