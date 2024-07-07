@@ -1469,7 +1469,7 @@ func TestReindexChildren(t *testing.T) {
 }
 
 func TestPreserveDuplicateAttrs(t *testing.T) {
-	s := `<element attr="test" attr="test2"/>`
+	s := `<element x="value1" y="value2" x="value3" x="value4" y="value5"/>`
 
 	checkAttrCount := func(e *Element, n int) {
 		if len(e.Attr) != n {
@@ -1492,23 +1492,20 @@ func TestPreserveDuplicateAttrs(t *testing.T) {
 	t.Run("enabled", func(t *testing.T) {
 		doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: true})
 		e := doc.FindElement("element")
-		checkAttrCount(e, 2)
-		checkAttr(e, 0, "attr", "test")
-		checkAttr(e, 1, "attr", "test2")
+		checkAttrCount(e, 5)
+		checkAttr(e, 0, "x", "value1")
+		checkAttr(e, 1, "y", "value2")
+		checkAttr(e, 2, "x", "value3")
+		checkAttr(e, 3, "x", "value4")
+		checkAttr(e, 4, "y", "value5")
 	})
 
 	t.Run("disabled", func(t *testing.T) {
-		doc := newDocumentFromString2(t, s, ReadSettings{PreserveDuplicateAttrs: false})
+		doc := newDocumentFromString2(t, s, ReadSettings{})
 		e := doc.FindElement("element")
-		checkAttrCount(e, 1)
-		checkAttr(e, 0, "attr", "test2")
-	})
-
-	t.Run("default", func(t *testing.T) {
-		doc := newDocumentFromString(t, s)
-		e := doc.FindElement("element")
-		checkAttrCount(e, 1)
-		checkAttr(e, 0, "attr", "test2")
+		checkAttrCount(e, 2)
+		checkAttr(e, 0, "x", "value4")
+		checkAttr(e, 1, "y", "value5")
 	})
 }
 

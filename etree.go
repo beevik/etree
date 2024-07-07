@@ -887,6 +887,7 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		r = newXmlSimpleReader(ri)
 	}
 
+	attrCheck := make(map[xml.Name]int)
 	dec := newDecoder(r, settings)
 
 	var stack stack[*Element]
@@ -919,8 +920,19 @@ func (e *Element) readFrom(ri io.Reader, settings ReadSettings) (n int64, err er
 		switch t := t.(type) {
 		case xml.StartElement:
 			e := newElement(t.Name.Space, t.Name.Local, top)
-			for _, a := range t.Attr {
-				e.createAttr(a.Name.Space, a.Name.Local, a.Value, e, settings.PreserveDuplicateAttrs)
+			if settings.PreserveDuplicateAttrs || len(t.Attr) < 2 {
+				for _, a := range t.Attr {
+					e.addAttr(a.Name.Space, a.Name.Local, a.Value)
+				}
+			} else {
+				for _, a := range t.Attr {
+					if i, contains := attrCheck[a.Name]; contains {
+						e.Attr[i].Value = a.Value
+					} else {
+						attrCheck[a.Name] = e.addAttr(a.Name.Space, a.Name.Local, a.Value)
+					}
+				}
+				clear(attrCheck)
 			}
 			stack.push(e)
 		case xml.EndElement:
@@ -1363,28 +1375,29 @@ func (e *Element) addChild(t Token) {
 // prefix followed by a colon.
 func (e *Element) CreateAttr(key, value string) *Attr {
 	space, skey := spaceDecompose(key)
-	return e.createAttr(space, skey, value, e, false)
-}
 
-// createAttr is a helper function that creates attributes.
-func (e *Element) createAttr(space, key, value string, parent *Element, preserveDups bool) *Attr {
-	if !preserveDups {
-		for i, a := range e.Attr {
-			if space == a.Space && key == a.Key {
-				e.Attr[i].Value = value
-				return &e.Attr[i]
-			}
+	for i, a := range e.Attr {
+		if space == a.Space && skey == a.Key {
+			e.Attr[i].Value = value
+			return &e.Attr[i]
 		}
 	}
 
+	i := e.addAttr(space, skey, value)
+	return &e.Attr[i]
+}
+
+// addAttr is a helper function that adds an attribute to an element. Returns
+// the index of the added attribute.
+func (e *Element) addAttr(space, key, value string) int {
 	a := Attr{
 		Space:   space,
 		Key:     key,
 		Value:   value,
-		element: parent,
+		element: e,
 	}
 	e.Attr = append(e.Attr, a)
-	return &e.Attr[len(e.Attr)-1]
+	return len(e.Attr) - 1
 }
 
 // RemoveAttr removes the first attribute of this element whose key matches
