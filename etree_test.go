@@ -257,16 +257,14 @@ func TestDocumentCharsetReader(t *testing.T) {
 	</Book>
 </Store>`
 
-	charsetLabel := ""
 	doc := newDocumentFromString2(t, s, ReadSettings{
 		CharsetReader: func(label string, input io.Reader) (io.Reader, error) {
-			charsetLabel = label
-			return &lowercaseCharsetReader{input}, nil
+			if label == "lowercase" {
+				return &lowercaseCharsetReader{input}, nil
+			}
+			return nil, errors.New("unknown charset")
 		},
 	})
-	if charsetLabel != "lowercase" {
-		t.Fatalf("etree: incorrect charset encoding, expected lowercase, got %s", charsetLabel)
-	}
 
 	cases := []struct {
 		path string
@@ -772,9 +770,13 @@ func TestSortAttrs(t *testing.T) {
 	checkStrEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
 }
 
-func TestCharsetReaderEncoding(t *testing.T) {
+func TestCharsetReaderDefaultSetting(t *testing.T) {
+	// Test encodings where the default pass-through charset conversion
+	// should work for common single-byte character encodings.
 	cases := []string{
+		`<?xml version="1.0"?><foo></foo>`,
 		`<?xml version="1.0" encoding="ISO-8859-1"?><foo></foo>`,
+		`<?xml version="1.0" encoding="Windows-1252"?><foo></foo>`,
 		`<?xml version="1.0" encoding="UTF-8"?><foo></foo>`,
 		`<?xml version="1.0" encoding="US-ASCII"?><foo></foo>`,
 	}
