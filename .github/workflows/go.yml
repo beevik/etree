@@ -2,10 +2,44 @@ name: Go
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
 
-  build:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
 
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["go"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@4fa2a7953630fd2f3fb380f21be14ede0169dd4f # v3.25.12
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@4fa2a7953630fd2f3fb380f21be14ede0169dd4f # v3.25.12
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@4fa2a7953630fd2f3fb380f21be14ede0169dd4f # v3.25.12
+        with:
+          category: "/language:${{matrix.language}}"
+
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     strategy:
@@ -13,10 +47,11 @@ jobs:
         go-version: [ '1.21', '1.22.x' ]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
       - name: Setup Go ${{ matrix.go-version }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
           go-version: ${{ matrix.go-version }}
 
