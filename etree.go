@@ -113,7 +113,8 @@ type WriteSettings struct {
 
 	// CanonicalAttrVal forces the production of XML character references for
 	// attribute value characters &, < and ". If false, XML character
-	// references are also produced for > and '. Default: false.
+	// references are also produced for > and '. Ignored when AttrSingleQuote
+	// is true. Default: false.
 	CanonicalAttrVal bool
 
 	// AttrSingleQuote causes attributes to use single quotes (attr='example')
@@ -1463,7 +1464,7 @@ func (a *Attr) WriteTo(w Writer, s *WriteSettings) {
 		w.WriteString(`="`)
 	}
 	var m escapeMode
-	if s.CanonicalAttrVal {
+	if s.CanonicalAttrVal && !s.AttrSingleQuote {
 		m = escapeCanonicalAttr
 	} else {
 		m = escapeNormal
