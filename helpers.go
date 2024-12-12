@@ -326,10 +326,15 @@ const (
 	escapeNormal escapeMode = iota
 	escapeCanonicalText
 	escapeCanonicalAttr
+	escapeSkip
 )
 
 // escapeString writes an escaped version of a string to the writer.
 func escapeString(w Writer, s string, m escapeMode) {
+	if m == escapeSkip {
+		w.WriteString(s)
+		return
+	}
 	var esc []byte
 	last := 0
 	for i := 0; i < len(s); {

@@ -111,6 +111,12 @@ type WriteSettings struct {
 	// are also produced for " and '. Default: false.
 	CanonicalText bool
 
+	// EscapeSkipText skip escape for text data Default: false.
+	EscapeSkipText bool
+
+	// EscapeSkipText skip escape for attribute value Default: false.
+	EscapeSkipAttrVal bool
+
 	// CanonicalAttrVal forces the production of XML character references for
 	// attribute value characters &, < and ". If false, XML character
 	// references are also produced for > and '. Ignored when AttrSingleQuote
@@ -1464,7 +1470,9 @@ func (a *Attr) WriteTo(w Writer, s *WriteSettings) {
 		w.WriteString(`="`)
 	}
 	var m escapeMode
-	if s.CanonicalAttrVal && !s.AttrSingleQuote {
+	if s.EscapeSkipAttrVal {
+		m = escapeSkip
+	} else if s.CanonicalAttrVal && !s.AttrSingleQuote {
 		m = escapeCanonicalAttr
 	} else {
 		m = escapeNormal
@@ -1579,7 +1587,9 @@ func (c *CharData) WriteTo(w Writer, s *WriteSettings) {
 		w.WriteString(`]]>`)
 	} else {
 		var m escapeMode
-		if s.CanonicalText {
+		if s.EscapeSkipText {
+			m = escapeSkip
+		} else if s.CanonicalText {
 			m = escapeCanonicalText
 		} else {
 			m = escapeNormal
