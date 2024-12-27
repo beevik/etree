@@ -770,6 +770,16 @@ func TestSortAttrs(t *testing.T) {
 	checkStrEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
 }
 
+func TestWriteSortAttrs(t *testing.T) {
+	doc := NewDocument()
+	doc.WriteSettings.SortAttrs = true
+	s := `<el foo='5' Foo='2' aaa='4' สวัสดี='7' AAA='1' a01='3' z='6' a:ZZZ='9' a:AAA='8'/>`
+	doc.ReadFromString(s)
+	doc.Indent(2)
+	out, _ := doc.WriteToString()
+	checkStrEq(t, out, `<el AAA="1" Foo="2" a01="3" aaa="4" foo="5" z="6" สวัสดี="7" a:AAA="8" a:ZZZ="9"/>`+"\n")
+}
+
 func TestCharsetReaderDefaultSetting(t *testing.T) {
 	// Test encodings where the default pass-through charset conversion
 	// should work for common single-byte character encodings.

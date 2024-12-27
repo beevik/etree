@@ -128,6 +128,9 @@ type WriteSettings struct {
 	//
 	// Deprecated: UseCRLF is deprecated. Use IndentSettings.UseCRLF instead.
 	UseCRLF bool
+
+	// SortAttrs to sort attr
+	SortAttrs bool
 }
 
 // dup creates a duplicate of the WriteSettings object.
@@ -1330,6 +1333,10 @@ func (e *Element) Index() int {
 func (e *Element) WriteTo(w Writer, s *WriteSettings) {
 	w.WriteByte('<')
 	w.WriteString(e.FullTag())
+
+	if s.SortAttrs {
+		e.SortAttrs()
+	}
 	for _, a := range e.Attr {
 		w.WriteByte(' ')
 		a.WriteTo(w, s)
