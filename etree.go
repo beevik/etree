@@ -752,11 +752,32 @@ func (e *Element) findTermCharDataIndex(start int) int {
 }
 
 // CreateElement creates a new element with the specified tag (i.e., name) and
-// adds it as the last child token of this element. The tag may include a
-// prefix followed by a colon.
+// adds it as the last child of element 'e'. The tag may include a prefix
+// followed by a colon.
 func (e *Element) CreateElement(tag string) *Element {
 	space, stag := spaceDecompose(tag)
 	return newElement(space, stag, e)
+}
+
+// CreateChild performs the same task as CreateElement but calls a
+// continuation function after the child element is created, allowing
+// additional actions to be performed on the child element before returning.
+//
+// This method of element creation is particularly useful when building nested
+// XML documents from code. For example:
+//
+//	org := doc.CreateChild("organization", func(e *Element) {
+//		e.CreateComment("Mary")
+//		e.CreateChild("person", func(e *Element) {
+//			e.CreateAttr("name", "Mary")
+//			e.CreateAttr("age", "30")
+//			e.CreateAttr("hair", "brown")
+//		})
+//	})
+func (e *Element) CreateChild(tag string, cont func(e *Element)) *Element {
+	child := e.CreateElement(tag)
+	cont(child)
+	return child
 }
 
 // AddChild adds the token 't' as the last child of the element. If token 't'
