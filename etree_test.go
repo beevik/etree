@@ -1629,3 +1629,56 @@ func TestSiblingElement(t *testing.T) {
 		}
 	}
 }
+
+func TestContinuations(t *testing.T) {
+	doc := NewDocument()
+	root := doc.CreateChild("root", func(e *Element) {
+		e.CreateChild("child1", func(e *Element) {
+			e.CreateComment("Grandchildren of child #1")
+			e.CreateChild("grandchild1", func(e *Element) {
+				e.CreateAttr("attr1", "1")
+				e.CreateAttr("attr2", "2")
+			})
+			e.CreateChild("grandchild2", func(e *Element) {
+				e.CreateAttr("attr1", "3")
+				e.CreateAttr("attr2", "4")
+			})
+		})
+		e.CreateChild("child2", func(e *Element) {
+			e.CreateComment("Grandchildren of child #2")
+			e.CreateChild("grandchild1", func(e *Element) {
+				e.CreateAttr("attr1", "5")
+				e.CreateAttr("attr2", "6")
+			})
+			e.CreateChild("grandchild2", func(e *Element) {
+				e.CreateAttr("attr1", "7")
+				e.CreateAttr("attr2", "8")
+			})
+		})
+	})
+	checkStrEq(t, root.Tag, "root")
+
+	// Serialize the document to a string
+	doc.IndentTabs()
+	s, err := doc.WriteToString()
+	if err != nil {
+		t.Error("etree: failed to serialize document")
+	}
+
+	// Make sure the serialized XML matches expectation.
+	expected := `<root>
+	<child1>
+		<!--Grandchildren of child #1-->
+		<grandchild1 attr1="1" attr2="2"/>
+		<grandchild2 attr1="3" attr2="4"/>
+	</child1>
+	<child2>
+		<!--Grandchildren of child #2-->
+		<grandchild1 attr1="5" attr2="6"/>
+		<grandchild2 attr1="7" attr2="8"/>
+	</child2>
+</root>
+`
+
+	checkStrEq(t, s, expected)
+}
