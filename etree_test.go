@@ -644,6 +644,34 @@ func TestInsertChild(t *testing.T) {
 	doc.Indent(2)
 	s4, _ := doc.WriteToString()
 	checkStrEq(t, s4, expected4)
+
+	year = doc.FindElement("//book/year")
+	book.InsertChildAt(0, year)
+
+	expected5 := `<book lang="en">
+  <year>1861</year>
+  <t:title>Great Expectations</t:title>
+  <author>Charles Dickens</author>
+</book>
+`
+
+	doc.Indent(2)
+	s5, _ := doc.WriteToString()
+	checkStrEq(t, s5, expected5)
+
+	author := doc.FindElement("//book/author")
+	year = doc.FindElement("//book/year")
+	book.InsertChildAt(author.Index(), year)
+
+	expected6 := `<book lang="en">
+  <t:title>Great Expectations</t:title>
+  <year>1861</year>
+  <author>Charles Dickens</author>
+</book>
+`
+	doc.Indent(2)
+	s6, _ := doc.WriteToString()
+	checkStrEq(t, s6, expected6)
 }
 
 func TestCdata(t *testing.T) {
