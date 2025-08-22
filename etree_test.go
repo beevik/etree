@@ -225,6 +225,172 @@ func TestDocument(t *testing.T) {
 	}
 }
 
+func TestSelectElementsSeq(t *testing.T) {
+	doc := NewDocument()
+	store := doc.CreateElement("store")
+	book1 := store.CreateElement("book")
+	book1.CreateAttr("id", "1")
+	book2 := store.CreateElement("book")
+	book2.CreateAttr("id", "2")
+	other := store.CreateElement("other")
+	other.CreateAttr("id", "3")
+	book3 := store.CreateElement("book")
+	book3.CreateAttr("id", "4")
+
+	expectedBooks := store.SelectElements("book")
+	if len(expectedBooks) != 3 {
+		t.Error("etree: setup error - expected 3 books")
+	}
+
+	var iterBooks []*Element
+	for book := range store.SelectElementsSeq("book") {
+		iterBooks = append(iterBooks, book)
+	}
+
+	if len(iterBooks) != len(expectedBooks) {
+		t.Errorf("etree: SelectElementsSeq returned %d elements, expected %d", len(iterBooks), len(expectedBooks))
+	}
+
+	for i, book := range iterBooks {
+		if book != expectedBooks[i] {
+			t.Errorf("etree: SelectElementsSeq element %d mismatch", i)
+		}
+		if book.SelectAttrValue("id", "") == "" {
+			t.Errorf("etree: SelectElementsSeq element %d missing id attribute", i)
+		}
+	}
+
+	count := 0
+	for book := range store.SelectElementsSeq("book") {
+		count++
+		if count == 2 {
+			break
+		}
+		_ = book
+	}
+	if count != 2 {
+		t.Errorf("etree: early termination failed, got %d iterations", count)
+	}
+
+	nonExistentCount := 0
+	for range store.SelectElementsSeq("nonexistent") {
+		nonExistentCount++
+	}
+	if nonExistentCount != 0 {
+		t.Errorf("etree: SelectElementsSeq found %d non-existent elements", nonExistentCount)
+	}
+}
+
+func TestFindElementsSeq(t *testing.T) {
+	doc := NewDocument()
+	store := doc.CreateElement("store")
+
+	book1 := store.CreateElement("book")
+	book1.CreateAttr("category", "fiction")
+	title1 := book1.CreateElement("title")
+	title1.SetText("Book One")
+	author1 := book1.CreateElement("author")
+	author1.SetText("Author A")
+
+	book2 := store.CreateElement("book")
+	book2.CreateAttr("category", "nonfiction")
+	title2 := book2.CreateElement("title")
+	title2.SetText("Book Two")
+	author2 := book2.CreateElement("author")
+	author2.SetText("Author B")
+
+	magazine := store.CreateElement("magazine")
+	magazine.CreateAttr("category", "tech")
+	magTitle := magazine.CreateElement("title")
+	magTitle.SetText("Tech Magazine")
+
+	section := store.CreateElement("section")
+	section.CreateAttr("name", "classics")
+	book3 := section.CreateElement("book")
+	book3.CreateAttr("category", "classic")
+	title3 := book3.CreateElement("title")
+	title3.SetText("Classic Book")
+
+	testCases := []struct {
+		name string
+		path string
+	}{
+		{"direct children", "book"},
+		{"all descendants", "//book"},
+		{"all titles", "//title"},
+		{"books with specific category", "book[@category='fiction']"},
+		{"nested path", "section/book"},
+		{"all elements", "//*"},
+		{"specific attribute", "//book[@category='classic']"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			expected := store.FindElements(tc.path)
+
+			var iterResults []*Element
+			for elem := range store.FindElementsSeq(tc.path) {
+				iterResults = append(iterResults, elem)
+			}
+
+			if len(iterResults) != len(expected) {
+				t.Errorf("FindElementsSeq returned %d elements, expected %d for path %s",
+					len(iterResults), len(expected), tc.path)
+			}
+
+			expectedMap := make(map[*Element]bool)
+			for _, e := range expected {
+				expectedMap[e] = true
+			}
+
+			for _, e := range iterResults {
+				if !expectedMap[e] {
+					t.Errorf("FindElementsSeq returned unexpected element for path %s", tc.path)
+				}
+			}
+		})
+	}
+
+	t.Run("early termination", func(t *testing.T) {
+		count := 0
+		for elem := range store.FindElementsSeq("//title") {
+			count++
+			if count == 2 {
+				break
+			}
+			_ = elem
+		}
+		if count != 2 {
+			t.Errorf("Early termination failed, got %d iterations", count)
+		}
+	})
+
+	t.Run("compiled path", func(t *testing.T) {
+		path := MustCompilePath("//book")
+		expected := store.FindElementsPath(path)
+
+		var iterResults []*Element
+		for elem := range store.FindElementsPathSeq(path) {
+			iterResults = append(iterResults, elem)
+		}
+
+		if len(iterResults) != len(expected) {
+			t.Errorf("FindElementsPathSeq returned %d elements, expected %d",
+				len(iterResults), len(expected))
+		}
+	})
+
+	t.Run("empty results", func(t *testing.T) {
+		count := 0
+		for range store.FindElementsSeq("//nonexistent") {
+			count++
+		}
+		if count != 0 {
+			t.Errorf("FindElementsSeq found %d non-existent elements", count)
+		}
+	})
+}
+
 func TestImbalancedXML(t *testing.T) {
 	cases := []string{
 		`<test>`,
