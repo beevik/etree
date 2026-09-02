@@ -1624,7 +1624,7 @@ func (c *CharData) SetData(text string) {
 	}
 }
 
-// IsCData returns true if this CharData token is contains a CDATA section. It
+// IsCData returns true if this CharData token contains a CDATA section. It
 // returns false if the CharData token contains simple text.
 func (c *CharData) IsCData() bool {
 	return (c.flags & cdataFlag) != 0
