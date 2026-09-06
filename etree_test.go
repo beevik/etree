@@ -17,6 +17,53 @@ import (
 	"testing"
 )
 
+var bookstoreXML = `
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore xmlns:p="urn:books-com:prices">
+
+	<!Directive>
+
+	<book category="COOKING">
+		<title lang="en">Everyday Italian</title>
+		<author>Giada De Laurentiis</author>
+		<year>2005</year>
+		<p:price>30.00</p:price>
+		<editor>Clarkson Potter</editor>
+	</book>
+
+	<book category="CHILDREN">
+		<title lang="en" sku="150">Harry Potter</title>
+		<author>J K. Rowling</author>
+		<year>2005</year>
+		<p:price p:tax="1.99">29.99</p:price>
+		<editor></editor>
+		<editor/>
+	</book>
+
+	<book category="WEB">
+		<title lang="en">XQuery Kick Start</title>
+		<author>James McGovern</author>
+		<author>Per Bothner</author>
+		<author>Kurt Cagle</author>
+		<author>James Linn</author>
+		<author>Vaidyanathan Nagarajan</author>
+		<year>2003</year>
+		<price>49.99</price>
+		<editor>
+		</editor>
+	</book>
+
+	<!-- Final book -->
+	<book category="WEB" path="/books/xml">
+		<title lang="en">Learning XML</title>
+		<author>Erik T. Ray</author>
+		<year>2003</year>
+		<p:price>39.95</p:price>
+	</book>
+
+</bookstore>
+`
+
 func newDocumentFromString(t *testing.T, s string) *Document {
 	return newDocumentFromString2(t, s, ReadSettings{})
 }
@@ -2172,4 +2219,46 @@ func nestedXML(depth int) string {
 		sb.WriteString("</a>")
 	}
 	return sb.String()
+}
+
+func TestTokenRemove(t *testing.T) {
+	doc := NewDocument()
+	err := doc.ReadFromString(bookstoreXML)
+	if err != nil {
+		t.Error(err)
+	}
+
+	bookstore := doc.SelectElement("bookstore")
+	if bookstore == nil {
+		t.Error("bookstore element not found")
+		return
+	}
+
+	// Remove all child tokens from the bookstore element.
+	for len(bookstore.Child) > 0 {
+		bookstore.Child[0].Remove()
+	}
+
+	result, err := doc.WriteToString()
+	if err != nil {
+		t.Error(err)
+	}
+
+	expected := `
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore xmlns:p="urn:books-com:prices"/>
+`
+	checkStrEq(t, result, expected)
+
+	// Remove all top-level child tokens from the document.
+	for len(doc.Child) > 0 {
+		doc.Child[0].Remove()
+	}
+
+	result, err = doc.WriteToString()
+	if err != nil {
+		t.Error(err)
+	}
+
+	checkStrEq(t, result, "")
 }
