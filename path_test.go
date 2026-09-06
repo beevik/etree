@@ -6,53 +6,6 @@ package etree
 
 import "testing"
 
-var testXML = `
-<?xml version="1.0" encoding="UTF-8"?>
-<bookstore xmlns:p="urn:books-com:prices">
-
-	<!Directive>
-
-	<book category="COOKING">
-		<title lang="en">Everyday Italian</title>
-		<author>Giada De Laurentiis</author>
-		<year>2005</year>
-		<p:price>30.00</p:price>
-		<editor>Clarkson Potter</editor>
-	</book>
-
-	<book category="CHILDREN">
-		<title lang="en" sku="150">Harry Potter</title>
-		<author>J K. Rowling</author>
-		<year>2005</year>
-		<p:price p:tax="1.99">29.99</p:price>
-		<editor></editor>
-		<editor/>
-	</book>
-
-	<book category="WEB">
-		<title lang="en">XQuery Kick Start</title>
-		<author>James McGovern</author>
-		<author>Per Bothner</author>
-		<author>Kurt Cagle</author>
-		<author>James Linn</author>
-		<author>Vaidyanathan Nagarajan</author>
-		<year>2003</year>
-		<price>49.99</price>
-		<editor>
-		</editor>
-	</book>
-
-	<!-- Final book -->
-	<book category="WEB" path="/books/xml">
-		<title lang="en">Learning XML</title>
-		<author>Erik T. Ray</author>
-		<year>2003</year>
-		<p:price>39.95</p:price>
-	</book>
-
-</bookstore>
-`
-
 type test struct {
 	path   string
 	result interface{}
@@ -155,7 +108,7 @@ var tests = []test{
 
 func TestPath(t *testing.T) {
 	doc := NewDocument()
-	err := doc.ReadFromString(testXML)
+	err := doc.ReadFromString(bookstoreXML)
 	if err != nil {
 		t.Error(err)
 	}
@@ -208,7 +161,7 @@ func fail(t *testing.T, test test) {
 
 func TestAbsolutePath(t *testing.T) {
 	doc := NewDocument()
-	err := doc.ReadFromString(testXML)
+	err := doc.ReadFromString(bookstoreXML)
 	if err != nil {
 		t.Error(err)
 	}
