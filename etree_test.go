@@ -2261,4 +2261,22 @@ func TestTokenRemove(t *testing.T) {
 	}
 
 	checkStrEq(t, result, "")
+
+	rm := func(tok Token) {
+		removed := tok.Remove()
+		if !removed {
+			t.Error("failed to remove token")
+		}
+
+		removed = tok.Remove()
+		if removed {
+			t.Error("token should not be removable again")
+		}
+	}
+
+	rm(doc.CreateElement("element"))
+	rm(doc.CreateCharData("    "))
+	rm(doc.CreateComment("comment"))
+	rm(doc.CreateDirective("directive"))
+	rm(doc.CreateProcInst("target", "inst"))
 }
