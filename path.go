@@ -379,6 +379,9 @@ func (c *compiler) parseFilter(path string) filter {
 		default:
 			return newFilterPos(pos)
 		}
+	case strings.Contains(path, ","), strings.Contains(path, "("), strings.Contains(path, ")"):
+		c.err = ErrPath("path has invalid filter " + path)
+		return nil
 	default:
 		return newFilterChild(path)
 	}

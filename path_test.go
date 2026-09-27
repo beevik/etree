@@ -104,6 +104,7 @@ var tests = []test{
 	{`./bookstore/book[@category="WEB']`, errorResult("etree: path has mismatched filter quotes.")},
 	{"./bookstore/book[author]a", errorResult("etree: path has invalid filter [brackets].")},
 	{"/][", errorResult("etree: path has invalid filter [brackets].")},
+	{"./bookstore/book[starts-with(@category, 'CHILD')]", errorResult("etree: path has invalid filter starts-with(@category, 'CHILD')")},
 }
 
 func TestPath(t *testing.T) {
