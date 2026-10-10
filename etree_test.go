@@ -1674,6 +1674,54 @@ func TestSetTail(t *testing.T) {
 	checkIntEq(t, len(child.Child), 1)
 }
 
+func TestCopiedDocumentChildParent(t *testing.T) {
+	doc := newDocumentFromString(t, `<?xml version="1.0"?><!--comment--><root/>`)
+	doc.CreateAttr("container", "original")
+	copied := doc.Copy()
+	for _, token := range copied.Child {
+		checkElementEq(t, token.Parent(), &copied.Element)
+	}
+	checkElementEq(t, copied.Attr[0].Element(), &copied.Element)
+	if !copied.Root().Remove() {
+		t.Fatal("failed to remove copied root")
+	}
+	checkElementEq(t, copied.Root(), nil)
+	if doc.Root() == nil {
+		t.Fatal("removing copied root changed the original document")
+	}
+}
+
+func TestCopiedAttrParent(t *testing.T) {
+	for _, kind := range []string{"element", "document"} {
+		t.Run(kind, func(t *testing.T) {
+			doc := newDocumentFromString(t, `<root xmlns:p="urn:original" p:id="root"><child p:id="child"/></root>`)
+			var root *Element
+			if kind == "document" {
+				root = doc.Copy().Root()
+			} else {
+				root = doc.Root().Copy()
+				checkElementEq(t, root.Parent(), nil)
+				checkIntEq(t, root.Index(), -1)
+			}
+			child := root.SelectElement("child")
+			for _, element := range []*Element{root, child} {
+				for i := range element.Attr {
+					checkElementEq(t, element.Attr[i].Element(), element)
+				}
+			}
+
+			// Namespace lookup and edits through Attr.Element must stay in the copy.
+			root.CreateAttr("xmlns:p", "urn:copy")
+			checkStrEq(t, root.SelectAttr("p:id").NamespaceURI(), "urn:copy")
+			checkStrEq(t, child.SelectAttr("p:id").NamespaceURI(), "urn:copy")
+			child.SelectAttr("p:id").Element().CreateAttr("edited", "yes")
+			checkStrEq(t, child.SelectAttrValue("edited", ""), "yes")
+			checkStrEq(t, doc.Root().SelectElement("child").SelectAttrValue("edited", ""), "")
+			checkStrEq(t, doc.Root().SelectAttr("p:id").NamespaceURI(), "urn:original")
+		})
+	}
+}
+
 func TestAttrParent(t *testing.T) {
 	doc := NewDocument()
 	root := doc.CreateElement("root")

@@ -314,11 +314,20 @@ func NewDocumentWithRoot(e *Element) *Document {
 
 // Copy returns a recursive, deep copy of the document.
 func (d *Document) Copy() *Document {
-	return &Document{
+	nd := &Document{
 		Element:       *(d.Element.dup(nil).(*Element)),
 		ReadSettings:  d.ReadSettings.dup(),
 		WriteSettings: d.WriteSettings.dup(),
 	}
+	// The duplicated container was copied by value into the document.
+	// Rebind its direct children and attributes to the embedded element.
+	for _, t := range nd.Child {
+		t.setParent(&nd.Element)
+	}
+	for i := range nd.Attr {
+		nd.Attr[i].element = &nd.Element
+	}
+	return nd
 }
 
 // Root returns the root element of the document. It returns nil if there is
@@ -557,7 +566,9 @@ func newElement(space, tag string, parent *Element) *Element {
 // another element using AddChild, or added to a document with SetRoot or
 // NewDocumentWithRoot.
 func (e *Element) Copy() *Element {
-	return e.dup(nil).(*Element)
+	ne := e.dup(nil).(*Element)
+	ne.index = -1
+	return ne
 }
 
 // FullTag returns the element e's complete tag, including namespace prefix if
@@ -1360,6 +1371,9 @@ func (e *Element) dup(parent *Element) Token {
 		ne.Child[i] = t.dup(ne)
 	}
 	copy(ne.Attr, e.Attr)
+	for i := range ne.Attr {
+		ne.Attr[i].element = ne
+	}
 	return ne
 }
 
