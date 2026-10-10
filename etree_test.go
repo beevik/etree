@@ -1701,6 +1701,34 @@ func TestAttrParent(t *testing.T) {
 	}
 }
 
+func TestXMLNamespaceURI(t *testing.T) {
+	const xmlNamespace = "http://www.w3.org/XML/1998/namespace"
+	for _, tc := range []struct {
+		name string
+		xml  string
+	}{
+		{"implicit", `<root xml:lang="en"><xml:child xml:space="preserve"/></root>`},
+		{"default namespace", `<root xmlns="urn:example" xml:lang="en"><xml:child xml:space="preserve"/></root>`},
+		{"explicit", `<root xmlns:xml="http://www.w3.org/XML/1998/namespace" xml:lang="en"><xml:child xml:space="preserve"/></root>`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := NewDocument()
+			if err := doc.ReadFromString(tc.xml); err != nil {
+				t.Fatal(err)
+			}
+			root := doc.Root()
+			child := root.SelectElement("xml:child")
+			checkStrEq(t, root.SelectAttr("xml:lang").NamespaceURI(), xmlNamespace)
+			checkStrEq(t, child.NamespaceURI(), xmlNamespace)
+			checkStrEq(t, child.SelectAttr("xml:space").NamespaceURI(), xmlNamespace)
+			// xml remains bound even after detaching a subtree from its declaration.
+			copy := child.Copy()
+			checkStrEq(t, copy.NamespaceURI(), xmlNamespace)
+			checkStrEq(t, copy.SelectAttr("xml:space").NamespaceURI(), xmlNamespace)
+		})
+	}
+}
+
 func TestDefaultNamespaceURI(t *testing.T) {
 	s := `
 <root xmlns="https://root.example.com" xmlns:attrib="https://attrib.example.com" attrib:a="foo" b="bar">

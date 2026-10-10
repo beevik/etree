@@ -582,6 +582,10 @@ func (e *Element) NamespaceURI() string {
 // findLocalNamespaceURI finds the namespace URI corresponding to the
 // requested prefix.
 func (e *Element) findLocalNamespaceURI(prefix string) string {
+	// The xml prefix is implicitly bound, even without an xmlns:xml attribute.
+	if prefix == "xml" {
+		return "http://www.w3.org/XML/1998/namespace"
+	}
 	for _, a := range e.Attr {
 		if a.Space == "xmlns" && a.Key == prefix {
 			return a.Value
