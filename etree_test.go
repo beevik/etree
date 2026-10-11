@@ -1554,6 +1554,65 @@ func TestTokenIndexing(t *testing.T) {
 	checkIndexes(t, &doc.Element)
 }
 
+func TestRemoveChildAtOutOfBounds(t *testing.T) {
+	for _, name := range []string{"empty", "mixed"} {
+		t.Run(name, func(t *testing.T) {
+			doc := NewDocument()
+			root := doc.CreateElement("root")
+			if name == "mixed" {
+				root.CreateElement("child")
+				root.CreateCharData("text")
+				root.CreateCData("data")
+				root.CreateComment("comment")
+				root.CreateDirective("directive")
+				root.CreateProcInst("target", "instruction")
+			}
+			children := append([]Token(nil), root.Child...)
+			before, err := doc.WriteToString()
+			if err != nil {
+				t.Fatal(err)
+			}
+			maxInt := int(^uint(0) >> 1)
+			cases := []struct {
+				name  string
+				index int
+			}{
+				{"negative one", -1},
+				{"negative several", -3},
+				{"minimum int", -maxInt - 1},
+				{"length", len(children)},
+				{"above length", len(children) + 1},
+				{"maximum int", maxInt},
+			}
+			for _, test := range cases {
+				t.Run(test.name, func(t *testing.T) {
+					defer func() {
+						if p := recover(); p != nil {
+							t.Errorf("RemoveChildAt(%d) panicked: %v", test.index, p)
+						}
+					}()
+					if removed := root.RemoveChildAt(test.index); removed != nil {
+						t.Fatalf("RemoveChildAt(%d) returned %v", test.index, removed)
+					}
+					if len(root.Child) != len(children) {
+						t.Fatalf("child count changed from %d to %d", len(children), len(root.Child))
+					}
+					for i, child := range children {
+						if root.Child[i] != child || child.Parent() != root || child.Index() != i {
+							t.Errorf("child %d changed identity, parent or index", i)
+						}
+					}
+					after, err := doc.WriteToString()
+					if err != nil {
+						t.Fatal(err)
+					}
+					checkStrEq(t, after, before)
+				})
+			}
+		})
+	}
+}
+
 func TestSetText(t *testing.T) {
 	doc := NewDocument()
 	root := doc.CreateElement("root")
