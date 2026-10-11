@@ -886,7 +886,7 @@ func (e *Element) RemoveChild(t Token) Token {
 // element's list of child tokens. The removed child token is then returned.
 // If the index is out of bounds, no child is removed and nil is returned.
 func (e *Element) RemoveChildAt(index int) Token {
-	if index >= len(e.Child) {
+	if index < 0 || index >= len(e.Child) {
 		return nil
 	}
 
