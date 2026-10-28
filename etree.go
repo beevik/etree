@@ -741,6 +741,15 @@ func (e *Element) replaceText(i int, text string, flags charDataFlags) {
 		}
 
 	default:
+		start := i
+		if text != "" {
+			start++ // The first text token is retained for the replacement.
+		}
+		for _, token := range e.Child[start:end] {
+			token.setParent(nil)
+			token.setIndex(-1)
+		}
+
 		if text == "" {
 			// remove all chardata tokens starting from index i
 			copy(e.Child[i:], e.Child[end:])
