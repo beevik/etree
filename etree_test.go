@@ -611,15 +611,15 @@ func TestEscapeCodes(t *testing.T) {
 	}{
 		{
 			"&<>'\"\t\n\r",
-			"<e a=\"&amp;&lt;&gt;&apos;&quot;\t\n\r\">&amp;&lt;&gt;&apos;&quot;\t\n\r</e>",
+			"<e a=\"&amp;&lt;&gt;&apos;&quot;&#x9;&#xA;&#xD;\">&amp;&lt;&gt;&apos;&quot;\t\n\r</e>",
 			"<e a=\"&amp;&lt;>'&quot;&#x9;&#xA;&#xD;\">&amp;&lt;&gt;&apos;&quot;\t\n\r</e>",
-			"<e a=\"&amp;&lt;&gt;&apos;&quot;\t\n\r\">&amp;&lt;&gt;'\"\t\n&#xD;</e>",
+			"<e a=\"&amp;&lt;&gt;&apos;&quot;&#x9;&#xA;&#xD;\">&amp;&lt;&gt;'\"\t\n&#xD;</e>",
 		},
 		{
 			"\x00\x1f\x08\x09\x0a\x0d",
-			"<e a=\"���\t\n\r\">���\t\n\r</e>",
 			"<e a=\"���&#x9;&#xA;&#xD;\">���\t\n\r</e>",
-			"<e a=\"���\t\n\r\">���\t\n&#xD;</e>",
+			"<e a=\"���&#x9;&#xA;&#xD;\">���\t\n\r</e>",
+			"<e a=\"���&#x9;&#xA;&#xD;\">���\t\n&#xD;</e>",
 		},
 	}
 	for _, c := range cases {
