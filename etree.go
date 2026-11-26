@@ -114,14 +114,19 @@ type WriteSettings struct {
 	CanonicalEndTags bool
 
 	// CanonicalText forces the production of XML character references for
-	// text data characters &, <, and >. If false, XML character references
-	// are also produced for " and '. Default: false.
+	// text data characters &, <, and >, as well as for carriage returns.
+	// If false, XML character references are also produced for " and ',
+	// but carriage returns in text data are written literally; set this
+	// option when text containing carriage returns must round-trip through
+	// an XML parser. Default: false.
 	CanonicalText bool
 
 	// CanonicalAttrVal forces the production of XML character references for
 	// attribute value characters &, < and ". If false, XML character
-	// references are also produced for > and '. Ignored when AttrSingleQuote
-	// is true. Default: false.
+	// references are also produced for > and '. Tab, newline and carriage
+	// return characters are always written as character references in
+	// attribute values so they survive XML attribute-value normalization.
+	// Ignored when AttrSingleQuote is true. Default: false.
 	CanonicalAttrVal bool
 
 	// AttrSingleQuote causes attributes to use single quotes (attr='example')
@@ -1553,7 +1558,7 @@ func (a *Attr) WriteTo(w Writer, s *WriteSettings) {
 	if s.CanonicalAttrVal && !s.AttrSingleQuote {
 		m = escapeCanonicalAttr
 	} else {
-		m = escapeNormal
+		m = escapeNormalAttr
 	}
 	escapeString(w, a.Value, m)
 	if s.AttrSingleQuote {

@@ -326,6 +326,7 @@ const (
 	escapeNormal escapeMode = iota
 	escapeCanonicalText
 	escapeCanonicalAttr
+	escapeNormalAttr
 )
 
 // escapeString writes an escaped version of a string to the writer.
@@ -346,7 +347,7 @@ func escapeString(w Writer, s string, m escapeMode) {
 			}
 			esc = []byte("&gt;")
 		case '\'':
-			if m != escapeNormal {
+			if m != escapeNormal && m != escapeNormalAttr {
 				continue
 			}
 			esc = []byte("&apos;")
@@ -356,12 +357,12 @@ func escapeString(w Writer, s string, m escapeMode) {
 			}
 			esc = []byte("&quot;")
 		case '\t':
-			if m != escapeCanonicalAttr {
+			if m != escapeCanonicalAttr && m != escapeNormalAttr {
 				continue
 			}
 			esc = []byte("&#x9;")
 		case '\n':
-			if m != escapeCanonicalAttr {
+			if m != escapeCanonicalAttr && m != escapeNormalAttr {
 				continue
 			}
 			esc = []byte("&#xA;")
