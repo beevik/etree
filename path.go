@@ -239,7 +239,7 @@ func (c *compiler) parsePath(path string) []segment {
 	}
 
 	// Split path into segments
-	for _, s := range splitPath(path) {
+	for _, s := range splitUnquoted(path, '/') {
 		segments = append(segments, c.parseSegment(s))
 		if c.err != ErrPath("") {
 			break
@@ -248,7 +248,7 @@ func (c *compiler) parsePath(path string) []segment {
 	return segments
 }
 
-func splitPath(path string) []string {
+func splitUnquoted(path string, separator byte) []string {
 	var pieces []string
 	start := 0
 	inquote := false
@@ -257,7 +257,7 @@ func splitPath(path string) []string {
 		if !inquote {
 			if path[i] == '\'' || path[i] == '"' {
 				inquote, quote = true, path[i]
-			} else if path[i] == '/' {
+			} else if path[i] == separator {
 				pieces = append(pieces, path[start:i])
 				start = i + 1
 			}
@@ -270,7 +270,7 @@ func splitPath(path string) []string {
 
 // parseSegment parses a path segment between / characters.
 func (c *compiler) parseSegment(path string) segment {
-	pieces := strings.Split(path, "[")
+	pieces := splitUnquoted(path, '[')
 	seg := segment{
 		sel:     c.parseSelector(pieces[0]),
 		filters: []filter{},
