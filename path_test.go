@@ -179,3 +179,21 @@ func TestAbsolutePath(t *testing.T) {
 		}
 	}
 }
+
+func TestPathFilterQuotedBrackets(t *testing.T) {
+	doc := NewDocument()
+	if err := doc.ReadFromString(`<files><file name="draft[2]/a">part[3]</file><file name="other"/></files>`); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{`./files/file[@name='draft[2]/a'][1]`, `./files/file[text()="part[3]"]`} {
+		path, err := CompilePath(query)
+		if err != nil {
+			t.Errorf("CompilePath(%q): %v", query, err)
+			continue
+		}
+		got := doc.FindElementPath(path)
+		if got == nil || got.SelectAttrValue("name", "") != "draft[2]/a" {
+			t.Errorf("unexpected match for %q: %v", query, got)
+		}
+	}
+}
